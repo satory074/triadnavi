@@ -304,17 +304,21 @@ export function positionValue(pos: Position): number {
 export type SetName = 'search' | 'refine';
 
 /**
- * win: 勝ちが確定するかだけを探る(安い。今のデッキが勝てるシナリオで、候補を早く落とすのに使う)
- * value: 保証値を求める
+ * シナリオ 1 つは、安い順に 3 段階で調べる。前の段階で決まれば、後の段階は要らない。
+ *   win   勝ちが確定するか(幅ゼロの窓)。当たれば保証値は 1
+ *   draw  引き分け以上が確定するか(幅ゼロの窓)。win が外れて draw が当たれば、保証値はちょうど 0
+ *   value 負けの深さ。最も重いので、負けと分かったシナリオでだけ求める
  */
+export type ProbeMode = 'win' | 'draw';
+
 export type DeckTask =
-  | { id: string; kind: 'scenario'; deckKey: string; deck: CardDef[]; set: SetName; scenario: number; mode: 'win' | 'value' }
-  | { id: string; kind: 'superset'; deckKey: string; deck: CardDef[]; first: Player; mode: 'win' | 'draw' };
+  | { id: string; kind: 'scenario'; deckKey: string; deck: CardDef[]; set: SetName; scenario: number; mode: ProbeMode | 'value' }
+  | { id: string; kind: 'superset'; deckKey: string; deck: CardDef[]; first: Player; mode: ProbeMode };
 
 export type DeckTaskResult =
-  | { id: string; kind: 'scenario'; deckKey: string; set: SetName; scenario: number; mode: 'win'; ok: boolean }
+  | { id: string; kind: 'scenario'; deckKey: string; set: SetName; scenario: number; mode: ProbeMode; ok: boolean }
   | { id: string; kind: 'scenario'; deckKey: string; set: SetName; scenario: number; mode: 'value'; value: number }
-  | { id: string; kind: 'superset'; deckKey: string; first: Player; mode: 'win' | 'draw'; ok: boolean };
+  | { id: string; kind: 'superset'; deckKey: string; first: Player; mode: ProbeMode; ok: boolean };
 
 export interface DeckContext {
   matchup: Matchup;
@@ -331,5 +335,6 @@ export function runDeckTask(ctx: DeckContext, task: DeckTask): DeckTaskResult {
   const set = task.set === 'refine' && ctx.refineSet ? ctx.refineSet : ctx.set;
   const pos = scenarioPosition(ctx.matchup, set, set.scenarios[task.scenario], task.deck);
   const base = { id: task.id, kind: 'scenario', deckKey: task.deckKey, set: task.set, scenario: task.scenario } as const;
-  return task.mode === 'win' ? { ...base, mode: 'win', ok: positionAtLeast(pos, 1) } : { ...base, mode: 'value', value: positionValue(pos) };
+  if (task.mode === 'value') return { ...base, mode: 'value', value: positionValue(pos) };
+  return { ...base, mode: task.mode, ok: positionAtLeast(pos, task.mode === 'win' ? 1 : 0) };
 }

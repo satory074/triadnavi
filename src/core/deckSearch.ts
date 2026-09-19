@@ -25,11 +25,12 @@ export interface ScenarioInfo {
 
 /**
  * シナリオごとの結果。undefined は未評価。
- * value は保証値(1 = 勝ち、0 = 引き分け、-k = k 枚差の負け)。win は「勝ちが確定するか」だけを安く探った結果で、
- * false なら勝ちではないことまでしか分かっていない(value は後で求める)。
+ * value は保証値(1 = 勝ち、0 = 引き分け、-k = k 枚差の負け)。win / draw は安い探りの結果で、
+ * win が当たれば value = 1、win が外れて draw が当たれば value = 0 と決まる。どちらも外れた時だけ、負けの深さを別に求める。
  */
 export interface Tally {
   win: (boolean | undefined)[];
+  draw: (boolean | undefined)[];
   value: (number | undefined)[];
 }
 
@@ -131,7 +132,8 @@ export function compareScores(a: DeckScore, b: DeckScore): number {
 }
 
 function emptyTally(n: number): Tally {
-  return { win: Array<undefined>(n).fill(undefined), value: Array<undefined>(n).fill(undefined) };
+  const blank = () => Array<undefined>(n).fill(undefined);
+  return { win: blank(), draw: blank(), value: blank() };
 }
 
 interface TallyState {
@@ -140,7 +142,7 @@ interface TallyState {
   deficit: number;
   /** まだ勝ちうるシナリオの重み(何も調べていないもの) */
   winLeft: number;
-  /** 勝ちではないと分かったが、保証値をまだ求めていないシナリオの重み(引き分けはありうる) */
+  /** 勝ちではないと分かったが、引き分け以上かをまだ調べていないシナリオの重み */
   drawLeft: number;
   complete: boolean;
 }
@@ -151,8 +153,10 @@ function tallyState(t: Tally, scenarios: readonly ScenarioInfo[]): TallyState {
     const v = t.value[i];
     if (v === undefined) {
       s.complete = false;
-      if (t.win[i] === false) s.drawLeft += sc.weight;
-      else s.winLeft += sc.weight;
+      if (t.win[i] === undefined) s.winLeft += sc.weight;
+      else if (t.draw[i] === undefined) s.drawLeft += sc.weight;
+      // 負けと分かっていて深さが未評価: 少なくとも 1 枚差はある
+      else s.deficit += sc.weight;
     } else if (v >= 1) {
       s.win += sc.weight;
       s.drawOrBetter += sc.weight;
@@ -250,7 +254,8 @@ export function createDeckSearch(input: SearchInput): DeckSearch {
   return settle(s);
 }
 
-const scenarioTaskId = (key: string, set: SetName, i: number, mode: 'win' | 'value') => `${key}#${set}${i}#${mode}`;
+type ScenarioMode = 'win' | 'draw' | 'value';
+const scenarioTaskId = (key: string, set: SetName, i: number, mode: ScenarioMode) => `${key}#${set}${i}#${mode}`;
 const supersetTaskId = (key: string, first: Player, mode: 'win' | 'draw') => `${key}#superset${first}#${mode}`;
 
 /** 先攻 first のシナリオが全て勝ち/引き分け以上なら、上位集合で確かめる価値がある */
@@ -281,19 +286,21 @@ function pendingTasks(s: DeckSearch, e: DeckEval): DeckTask[] {
   if (e.pruned) return [];
   const t = tallyOf(e, g.set);
   if (!t) return [];
-  const task = (i: number, mode: 'win' | 'value'): DeckTask => ({
+  const task = (i: number, mode: ScenarioMode): DeckTask => ({
     id: scenarioTaskId(e.key, g.set, i, mode), kind: 'scenario', deckKey: e.key, deck: e.cards, set: g.set, scenario: i, mode,
   });
+  const stage = (i: number): ScenarioMode => (t.win[i] === undefined ? 'win' : t.draw[i] === undefined ? 'draw' : 'value');
   const open = g.order.filter((i) => t.value[i] === undefined);
-  // 比べる相手がいない時(出発点、測り直し)は、全シナリオの保証値を並行して求める
-  if (g.bound === null) return open.map((i) => task(i, 'value')).filter((x) => s.tasks[x.id] === undefined);
+  // 比べる相手がいない時(出発点、測り直し)は、各シナリオの次の段階を並行して進める
+  if (g.bound === null) return open.map((i) => task(i, stage(i))).filter((x) => s.tasks[x.id] === undefined);
   if ((s.inflight[e.key] ?? 0) > 0) return [];
-  // 1 周目: 全シナリオで勝ちだけを安く探る(保証値の 1/3〜1/5 の手間)。比べるのはまず勝ちの数なので、
-  // 勝ちの数で上回れない候補は、重い保証値の探索を 1 回もせずに落とせる。
-  // 2 周目: 勝ちの数で並んだ/上回った候補だけ、勝ちではなかったシナリオの保証値を求める
-  const first = open.filter((i) => t.win[i] === undefined);
-  const next = first.length > 0 ? task(first[0], 'win') : open.length > 0 ? task(open[0], 'value') : null;
-  return next && s.tasks[next.id] === undefined ? [next] : [];
+  // 比べる相手がいる時は 1 つずつ、段階の浅いものから(勝ち → 引き分け → 負けの深さ)。比べる順も同じなので、
+  // 勝ちの数で上回れない候補は引き分けを調べずに、引き分け以上の数で上回れない候補は重い探索をせずに落とせる
+  for (const mode of ['win', 'draw', 'value'] as const) {
+    const i = open.find((k) => stage(k) === mode);
+    if (i !== undefined) return s.tasks[scenarioTaskId(e.key, g.set, i, mode)] === undefined ? [task(i, mode)] : [];
+  }
+  return [];
 }
 
 export function nextDeckTasks(s: DeckSearch, n: number): DeckTask[] {
@@ -325,13 +332,14 @@ export function applyDeckResult(s: DeckSearch, r: DeckTaskResult): DeckSearch {
     next = { ...e, superset: { ...e.superset, [r.first]: r.ok ? r.mode : 'none' } };
   } else {
     const t = tallyOf(e, r.set) ?? emptyTally(scenariosOf(s, r.set).length);
-    const updated: Tally = { win: t.win.slice(), value: t.value.slice() };
-    if (r.mode === 'value') {
-      updated.value[r.scenario] = r.value;
-      updated.win[r.scenario] = r.value >= 1;
-    } else {
+    const updated: Tally = { win: t.win.slice(), draw: t.draw.slice(), value: t.value.slice() };
+    if (r.mode === 'value') updated.value[r.scenario] = r.value;
+    else if (r.mode === 'win') {
       updated.win[r.scenario] = r.ok;
       if (r.ok) updated.value[r.scenario] = 1;
+    } else {
+      updated.draw[r.scenario] = r.ok;
+      if (r.ok) updated.value[r.scenario] = 0;
     }
     next = r.set === 'refine' ? { ...e, refined: updated } : { ...e, tally: updated };
     const bound = s.generation.bound;

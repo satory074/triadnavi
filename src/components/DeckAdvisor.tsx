@@ -110,13 +110,14 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
               {progress.decksPruned > 0 && `(ほかに ${progress.decksPruned} 個を途中で打ち切り)`}
               <button type="button" className="btn-quiet" onClick={stop}>止める</button>
             </p>
+          ) : top.length === 0 && run.mode !== 'evaluate' ? (
+            <p className="note note-warn" role="status">手持ちからデッキを組めませんでした。★4 以上ばかりの時は、★3 以下のカードも登録してください。</p>
           ) : (
             <p className="note" role="status">
               {progress.complete ? stopReasonText(search.stopReason) : '途中で止めました。ここまでに見つかった中で最良のデッキです。'}
               {run.mode !== 'evaluate' && ` 調べたデッキ: ${progress.decksDone + progress.decksPruned}`}
             </p>
           )}
-          {top.length === 0 && !running && run.mode !== 'evaluate' && <p className="note note-warn">手持ちからデッキを組めませんでした。★4 以上ばかりの時は、★3 以下のカードも登録してください。</p>}
 
           {top.map((e, i) => (
             <DeckResult

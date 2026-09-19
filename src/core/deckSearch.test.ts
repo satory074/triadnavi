@@ -46,7 +46,8 @@ function synthetic(bias = -40): (t: DeckTask) => DeckTaskResult {
   return (t) => {
     if (t.kind === 'superset') return { id: t.id, kind: 'superset', deckKey: t.deckKey, first: t.first, mode: t.mode, ok: hash(t.id) % 2 === 0 };
     const base = { id: t.id, kind: 'scenario', deckKey: t.deckKey, set: t.set, scenario: t.scenario } as const;
-    return t.mode === 'win' ? { ...base, mode: 'win', ok: valueOf(t) >= 1 } : { ...base, mode: 'value', value: valueOf(t) };
+    if (t.mode === 'value') return { ...base, mode: 'value', value: valueOf(t) };
+    return { ...base, mode: t.mode, ok: valueOf(t) >= (t.mode === 'win' ? 1 : 0) };
   };
 }
 
@@ -175,7 +176,9 @@ describe('デッキの探索', () => {
     expect(s).toMatchObject({ phase: 'done', stopReason: 'evaluated' });
     expect(Object.keys(s.evals)).toEqual([deckKey(mine, false)]);
     expect(isComplete(s, s.evals[deckKey(mine, false)])).toBe(true);
-    expect(s.probes).toBe(f.ctx.set.scenarios.length);
+    // シナリオごとに、勝ち → 引き分け → 負けの深さ、の決まった所まで
+    const stages = s.evals[deckKey(mine, false)].tally.value.map((v) => (v! >= 1 ? 1 : v === 0 ? 2 : 3));
+    expect(s.probes).toBe(stages.reduce((a, b) => a + b, 0));
   });
 
   it('サンプリングで探索した時は、上位のデッキだけを大きいシナリオで測り直す', () => {

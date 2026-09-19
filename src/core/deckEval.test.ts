@@ -284,6 +284,7 @@ describe('runDeckTask', () => {
       const base = { id: `t${i}`, kind: 'scenario', deckKey: 'k', set: 'search', scenario: i } as const;
       expect(runDeckTask(ctx, { ...base, deck, mode: 'value' })).toEqual({ ...base, mode: 'value', value: positionValue(pos) });
       expect(runDeckTask(ctx, { ...base, deck, mode: 'win' })).toEqual({ ...base, mode: 'win', ok: positionValue(pos) >= 1 });
+      expect(runDeckTask(ctx, { ...base, deck, mode: 'draw' })).toEqual({ ...base, mode: 'draw', ok: positionValue(pos) >= 0 });
     });
   });
 

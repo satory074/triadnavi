@@ -92,6 +92,7 @@ export function stopReasonText(reason: StopReason | undefined): string {
     case 'perfect': return '全ての状況で勝ちが確定するデッキが見つかったので、探索を終えました。';
     case 'exhausted': return '候補のカードとの 1 枚の入れ替えでは、これ以上良くなりません。見つかった中で最良のデッキです(全てのデッキを調べたわけではありません)。';
     case 'budget': return '調べるデッキ数の上限に達しました。見つかった中で最良のデッキです。';
+    case 'evaluated': return '評価が終わりました。';
     default: return '';
   }
 }
