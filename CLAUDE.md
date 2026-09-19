@@ -38,7 +38,8 @@ npm run data:update  # カード/NPC データの更新(手動実行。生成さ
 - `core/match.ts` — 対局の記録(イベントソーシング)。`replay()` は参照エンジンで再生する
 - `core/suddenDeath.ts` — サドンデス再戦の手札の組み直し
 - `core/appState.ts` / `core/presets.ts` — アプリの状態、保存データの検証つき読み込み
-- `data/` — 同梱データ(`cards.json` / `npcs.json`)と検索、数字 4 つからの逆引き。エンジンとソルバーは触らない
+- `core/collection.ts` — 手持ち(所持カードの ID の集合)の保存形式・テキスト入出力と、デッキの制限(★5 は 1 枚まで、★4 以上は合わせて 2 枚まで)
+- `data/` — 同梱データ(`cards.json` / `npcs.json`)と検索、数字 4 つからの逆引き、数字 → カード ID の対応づけ。エンジンとソルバーは触らない(core は `data/` を import しない。ID とレアリティが要る所は `DeckCard` で受け取る)
 - `worker/solver.worker.ts` — `runTask` を包むだけの殻。`hooks/useSolver.ts` がワーカープールを管理する
 
 ### 設計上の重要な決定
@@ -53,6 +54,8 @@ npm run data:update  # カード/NPC データの更新(手動実行。生成さ
 - **ワーカーの中断は terminate**: 同期処理の探索はメッセージでは止められず、`SharedArrayBuffer` は GitHub Pages では必要なヘッダーを設定できない。局面が変わったら計算中のワーカーを破棄して作り直す。
 - **画面反映の間引きはタイマー**: `requestAnimationFrame` は非表示のタブで発火しないため、ゲームの横で裏に回っている間に更新が止まる。
 - **状態の更新関数に副作用を入れない**: StrictMode では更新関数が 2 回走り、カードが二重に確定する(`CardEditor` で実際に踏んだ)。
+- **手持ちはカード ID で保存する**: 保存済みデッキは `CardDef`(数字とタイプ)だが、手持ちは数字もタイプも同じ別カードが 6 組あるので ID で持つ(`triadnavi:collection:v1`)。同梱データに無い ID も捨てない(データを古い版に戻しても所持が消えないように)。手持ちの画面は `AppState.phase` に入れず `App.tsx` の一時的な状態にしている(`parseAppState` は未知の phase を対戦前に落とすので、保存形式を変えずに済む)。
+- **カードリストの並びは ID 順ではない**: ゲーム内の番号は `order`(`ex` なら Ex. 番号)。475 枚中 408 枚で ID と食い違うので、手持ちの画面は `CARDS_IN_LIST_ORDER` で並べる。
 - **データの更新は手動**: CI では第三者 API を叩かない(API の停止でデプロイが壊れないように)。NPC のデッキとルールはゲームデータ由来の XIVAPI を正とする。ルーレットが 2 枠ある NPC は `rules: [1, 1]` になる。
 
 ### 実機で未確認の挙動(どの情報源にも検証例が無い)

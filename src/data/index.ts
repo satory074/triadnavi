@@ -1,3 +1,4 @@
+import { deckProblems, type DeckCard, type DeckProblem } from '../core/collection';
 import type { Rng } from '../core/rng';
 import type { CardDef, CardType, Sides } from '../core/types';
 import cardsJson from './cards.json';
@@ -14,6 +15,9 @@ export interface CardInfo {
   sides: Sides;
   type: CardType;
   stars: number;
+  /** ゲーム内カードリストの番号(No. 1〜、ex なら Ex. 1〜)。ID 順とは一致しない */
+  order: number;
+  ex: boolean;
 }
 
 export interface NpcInfo {
@@ -61,6 +65,39 @@ export function toCardDef(c: CardInfo): CardDef {
   return { sides: c.sides, type: c.type, label: c.name };
 }
 
+export function toDeckCard(c: CardInfo): DeckCard {
+  return { id: c.id, stars: c.stars, sides: c.sides, type: c.type, label: c.name };
+}
+
+/** ゲーム内カードリストと同じ並び(No. 順、その後に Ex.) */
+export const CARDS_IN_LIST_ORDER: readonly CardInfo[] = [...CARDS].sort((a, b) => Number(a.ex) - Number(b.ex) || a.order - b.order);
+
+export function cardNumber(c: CardInfo): string {
+  return `${c.ex ? 'Ex.' : 'No.'} ${c.order}`;
+}
+
+/**
+ * 数字とタイプからカード ID の候補を引く。数字もタイプも同じカードが 6 組あるので、名前が一致するものを先頭にする。
+ * 手入力のカード(同梱データに無い数字)は空になる。
+ */
+export function resolveCardIds(card: CardDef): number[] {
+  const hits = findBySides(card.sides).filter((c) => c.type === card.type);
+  return [...hits.filter((c) => c.name === card.label), ...hits.filter((c) => c.name !== card.label)].map((c) => c.id);
+}
+
+/** 手札 5 枚を同梱データのカードに対応づける。対応がつかないカードがあれば null。同じ ID は 2 回使わない */
+export function resolveDeck(cards: readonly CardDef[]): CardInfo[] | null {
+  const used = new Set<number>();
+  const out: CardInfo[] = [];
+  for (const card of cards) {
+    const id = resolveCardIds(card).find((x) => !used.has(x));
+    if (id === undefined) return null;
+    used.add(id);
+    out.push(byId.get(id)!);
+  }
+  return out;
+}
+
 /** ひらがな → カタカナ、英字は小文字、空白と中黒を除去 */
 export function normalize(s: string): string {
   return s
@@ -96,6 +133,30 @@ export function npcById(id: number): NpcInfo | undefined {
 export function npcCards(npc: NpcInfo): { fixed: CardInfo[]; variable: CardInfo[] } {
   const get = (ids: number[]) => ids.map((id) => byId.get(id)).filter((c): c is CardInfo => c !== undefined);
   return { fixed: get(npc.fixed), variable: get(npc.variable) };
+}
+
+/**
+ * 入力中の手札がデッキの制限に反していないか。同梱データに無い(手入力の)カードはレアリティが分からないので数えない。
+ * 枚数は見ない(入力の途中でも使うため)。
+ */
+export function handProblems(cards: readonly (CardDef | null)[]): DeckProblem[] {
+  const used = new Set<number>();
+  const rated: { id: number; stars: number }[] = [];
+  let duplicate = false;
+  for (const card of cards) {
+    if (!card) continue;
+    const ids = resolveCardIds(card);
+    if (ids.length === 0) continue;
+    const id = ids.find((x) => !used.has(x));
+    if (id === undefined) {
+      duplicate = true;
+      continue;
+    }
+    used.add(id);
+    rated.push({ id, stars: byId.get(id)!.stars });
+  }
+  const out = deckProblems(rated).filter((p) => p !== 'size' && p !== 'duplicate');
+  return duplicate ? ['duplicate', ...out] : out;
 }
 
 /** 相手の候補が不明な時に、不明スロットを埋める実カードを引く。強さの想定は 3 段階 */

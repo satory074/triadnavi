@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { makeRng } from '../core/rng';
-import { CARDS, NPCS, findBySides, normalize, npcCards, samplePriorCard, searchCards, searchNpcs, typeFromSides } from './index';
+import {
+  CARDS, CARDS_IN_LIST_ORDER, NPCS, cardNumber, findBySides, handProblems, normalize, npcCards, resolveCardIds, resolveDeck, samplePriorCard, searchCards,
+  searchNpcs, toCardDef, typeFromSides,
+} from './index';
 
 describe('同梱データの整合性', () => {
   it('カードの値が範囲内で、ID が一意', () => {
@@ -14,6 +17,16 @@ describe('同梱データの整合性', () => {
       expect(c.stars).toBeGreaterThanOrEqual(1);
       expect(c.stars).toBeLessThanOrEqual(5);
     }
+  });
+
+  it('カードリストの番号は No. と Ex. のそれぞれで 1 から連番になっている', () => {
+    for (const ex of [false, true]) {
+      const orders = CARDS.filter((c) => c.ex === ex).map((c) => c.order).sort((a, b) => a - b);
+      expect(orders).toEqual(orders.map((_, i) => i + 1));
+    }
+    expect(CARDS_IN_LIST_ORDER.length).toBe(CARDS.length);
+    expect(cardNumber(CARDS_IN_LIST_ORDER[0])).toBe('No. 1');
+    expect(cardNumber(CARDS_IN_LIST_ORDER[CARDS.length - 1])).toMatch(/^Ex\. \d+$/);
   });
 
   it('NPC のデッキに参照切れが無く、手札 5 枚を組める', () => {
@@ -34,6 +47,51 @@ describe('同梱データの整合性', () => {
     const squall = CARDS.find((c) => c.name === 'スコール・レオンハート')!;
     expect(squall.sides).toEqual([6, 10, 10, 1]);
     expect(squall.stars).toBe(5);
+  });
+});
+
+describe('カード ID への対応づけ', () => {
+  it('どのカードも、自分自身の ID が先頭に来る', () => {
+    for (const c of CARDS) expect(resolveCardIds(toCardDef(c))[0]).toBe(c.id);
+  });
+
+  it('数字もタイプも同じ別カードは、名前が無ければ両方が候補になる', () => {
+    const ids = resolveCardIds({ sides: [7, 7, 7, 7], type: 0 });
+    expect(ids.length).toBe(2);
+    expect(resolveCardIds({ sides: [7, 7, 7, 7], type: 0, label: 'ゼレニア' })[0]).toBe(CARDS.find((c) => c.name === 'ゼレニア')!.id);
+  });
+
+  it('手札の対応づけでは同じ ID を 2 回使わず、同梱データに無いカードがあれば null', () => {
+    const seven = { sides: [7, 7, 7, 7], type: 0 } as const;
+    const others = CARDS.slice(0, 3).map(toCardDef);
+    const deck = resolveDeck([seven, seven, ...others]);
+    expect(deck).not.toBeNull();
+    expect(new Set(deck!.map((c) => c.id)).size).toBe(5);
+    expect(resolveDeck([seven, seven, seven, ...others.slice(0, 2)])).toBeNull();
+    expect(resolveDeck([{ sides: [1, 1, 1, 1], type: 0 }, ...CARDS.slice(0, 4).map(toCardDef)])).toBeNull();
+  });
+});
+
+describe('入力中の手札の制限', () => {
+  const pick = (stars: number, n: number) => CARDS.filter((c) => c.stars === stars).slice(0, n).map(toCardDef);
+
+  it('★5 が 2 枚、★4 以上が 3 枚で違反になる。途中までの入力でも分かる', () => {
+    expect(handProblems([...pick(5, 1), ...pick(4, 1), ...pick(3, 3)])).toEqual([]);
+    expect(handProblems([...pick(5, 2), null, null, null])).toEqual(['fiveStar']);
+    expect(handProblems([...pick(4, 3), null, null])).toEqual(['fourPlus']);
+    expect(handProblems([null, null, null, null, null])).toEqual([]);
+  });
+
+  it('同じカードを 2 枚入れると違反。数字が同じ別カードが 2 種類ある時は 3 枚目から', () => {
+    const dodo = toCardDef(CARDS[0]);
+    expect(handProblems([dodo, dodo, null, null, null])).toEqual(['duplicate']);
+    const seven = { sides: [7, 7, 7, 7], type: 0 } as const;
+    expect(handProblems([seven, seven, null, null, null])).toEqual([]);
+    expect(handProblems([seven, seven, seven, null, null])).toContain('duplicate');
+  });
+
+  it('同梱データに無い手入力のカードは数えない', () => {
+    expect(handProblems([{ sides: [1, 1, 1, 1], type: 0 }, { sides: [1, 1, 1, 1], type: 0 }, null, null, null])).toEqual([]);
   });
 });
 

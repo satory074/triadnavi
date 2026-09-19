@@ -436,6 +436,113 @@ input:not([type]) {
   background: linear-gradient(to top, var(--mat-950) 70%, transparent);
 }
 
+/* ---- 手持ちの登録 ---- */
+.collection {
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.coll-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+}
+
+.coll-head h2 {
+  margin: 0;
+}
+
+.coll-head .muted {
+  flex: 1;
+  font-size: 0.85rem;
+}
+
+.coll-filters {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.7rem 0;
+  padding: 0.6rem 0;
+  border-block: 1px solid var(--mat-line);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--mat-800);
+}
+
+.coll-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.coll-row input[type='search'] {
+  flex: 1;
+  min-width: 10rem;
+  width: auto;
+}
+
+.coll-count {
+  font-family: var(--font-num);
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.coll-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.3rem, 1fr));
+  gap: 0.6rem 0.45rem;
+}
+
+.coll-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: center;
+}
+
+.coll-cell:not(.is-owned) .card {
+  opacity: 0.45;
+}
+
+.coll-cell.is-owned .pool-name {
+  color: var(--paper);
+}
+
+.coll-no {
+  font-family: var(--font-num);
+  font-size: 0.7rem;
+  color: var(--paper-dim);
+}
+
+.coll-stars {
+  color: var(--gilt);
+}
+
+.coll-io {
+  margin-top: 1.6rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--mat-line);
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-family: var(--font-num);
+  color: inherit;
+  background: var(--mat-950);
+  border: 1px solid var(--mat-line);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  margin-top: 0.4rem;
+  resize: vertical;
+}
+
 /* ---- カード ---- */
 .hand-row {
   display: grid;

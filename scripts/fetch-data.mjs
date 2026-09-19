@@ -2,7 +2,7 @@
 // CI では実行しない(第三者 API の停止でデプロイが壊れないようにするため)。1 回の更新は GET 3 回。
 //
 // 取得元:
-//   FFXIV Collect  … カードの日本語名・四辺の数字・タイプ・レアリティ、NPC の日本語名・場所
+//   FFXIV Collect  … カードの日本語名・四辺の数字・タイプ・レアリティ・ゲーム内リストの並び、NPC の日本語名・場所
 //   XIVAPI v2      … NPC のデッキ(固定/可変)・固定ルール・流行ルール適用フラグ(ゲームデータそのもの)
 import { writeFile, mkdir } from 'node:fs/promises';
 
@@ -25,14 +25,27 @@ const [cardsRaw, npcsRaw, decksRaw] = await Promise.all([getJson(CARDS_URL), get
 const cards = cardsRaw.results
   .map((c) => {
     const s = c.stats.numeric;
-    return { id: c.id, name: c.name, sides: [s.top, s.right, s.bottom, s.left], type: c.type.id, stars: c.stars };
+    // order / ex はゲーム内カードリストの並び(No. 1〜 と Ex. 1〜)。id 順とは一致しない
+    return {
+      id: c.id,
+      name: c.name,
+      sides: [s.top, s.right, s.bottom, s.left],
+      type: c.type.id,
+      stars: c.stars,
+      order: c.order,
+      ex: c.order_group !== 0,
+    };
   })
   .sort((a, b) => a.id - b.id);
 
 for (const c of cards) {
   const ok = c.sides.every((v) => Number.isInteger(v) && v >= 1 && v <= 10) && c.type >= 0 && c.type <= 4;
   if (!ok) throw new Error(`カード ${c.id} ${c.name} の値が想定外です: ${JSON.stringify(c)}`);
+  if (!Number.isInteger(c.stars) || c.stars < 1 || c.stars > 5) throw new Error(`カード ${c.id} ${c.name} のレアリティが想定外です: ${c.stars}`);
+  if (!Number.isInteger(c.order) || c.order < 1) throw new Error(`カード ${c.id} ${c.name} の並び順が想定外です: ${c.order}`);
 }
+const orderKeys = new Set(cards.map((c) => `${c.ex}:${c.order}`));
+if (orderKeys.size !== cards.length) throw new Error('カードリストの並び順(ex, order)が重複しています');
 const cardIds = new Set(cards.map((c) => c.id));
 
 const decks = new Map(decksRaw.rows.map((r) => [r.row_id, r.fields]));

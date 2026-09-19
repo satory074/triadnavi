@@ -2,11 +2,12 @@ import { useState } from 'react';
 import {
   applyNpc, clearNpc, clearOppSlot, revealPoolCard, setupProblems, setupWarnings, toggleRule, type SetupDraft,
 } from '../core/appState';
+import { DECK_PROBLEM_TEXT } from '../core/collection';
 import type { SavedData, SavedDeck } from '../core/presets';
 import { sameCard } from '../core/presets';
 import { rulesFromIds } from '../core/rules';
 import type { CardDef } from '../core/types';
-import { npcById, npcCards, toCardDef, type NpcInfo } from '../data';
+import { handProblems, npcById, npcCards, toCardDef, type NpcInfo } from '../data';
 import { CardEditor } from './CardEditor';
 import { CardView } from './CardView';
 import { DeckPicker } from './DeckPicker';
@@ -100,6 +101,9 @@ export function SetupScreen({ draft, saved, onDraft, onSaved, onStart }: Props) 
             </div>
           ))}
         </div>
+        {handProblems(draft.myCards).map((p) => (
+          <p className="note note-warn" key={p}>{DECK_PROBLEM_TEXT[p]}。ゲーム内ではこのデッキを組めません。</p>
+        ))}
         {rules.pick === 'order' && <p className="note">オーダーでは左から順に出すことになります。デッキの並び順どおりに入れてください。</p>}
         <DeckPicker
           decks={saved.decks}
