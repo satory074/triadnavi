@@ -50,7 +50,7 @@ export interface MatchView {
   lastCell: number | null;
   /** 所有を手動で修正したことがある(以降の保証は参考) */
   overridden: boolean;
-  /** 候補リストがあるのに、リスト外のカードが出た(それまでの保証は無効だった) */
+  /** 入力した手札や候補リストに無いカードが出た(それまでの保証は無効だった) */
   outOfPool: boolean;
   finished: boolean;
   score: { me: number; opp: number } | null;
@@ -115,11 +115,16 @@ export function replay(setup: MatchSetup, events: readonly MatchEvent[]): MatchV
       oppPool = oppPool.filter((i) => i !== idx);
       oppUnknown--;
     } else if (ref.from === 'adhoc' && ev.by === 1) {
-      if (oppUnknown <= 0) break;
       idx = cards.push(ref.card) - 1;
       state = { ...state, cards };
-      oppUnknown--;
-      if (setup.oppPool.length > 0) outOfPool = true;
+      if (oppUnknown > 0) {
+        oppUnknown--;
+        if (setup.oppPool.length > 0) outOfPool = true;
+      } else {
+        // 手札を全て既知として入力していたのに、別のカードが出た(入力ミス)。詰まないよう受け付ける。
+        // 既知の手札が 1 枚余るが、相手の選択肢が増えるだけなので保証は悲観側に倒れる
+        outOfPool = true;
+      }
     } else {
       break;
     }

@@ -34,6 +34,8 @@ export interface Analysis {
   worldCount: number;
   worldsEnumerated: boolean;
   chaosExact: boolean;
+  /** 上位集合の探索ができるか(候補が足りているか)。できない時は保証に関わるタスクを発行しない */
+  supersetOk: boolean;
   tasks: Record<string, 'issued' | 'done'>;
 }
 
@@ -44,6 +46,7 @@ export function createAnalysis(
   worldCount: number,
   worldsEnumerated: boolean,
   chaosExact: boolean,
+  supersetOk: boolean,
 ): Analysis {
   return {
     key,
@@ -52,6 +55,7 @@ export function createAnalysis(
     worldCount,
     worldsEnumerated,
     chaosExact,
+    supersetOk,
     tasks: {},
   };
 }
@@ -82,7 +86,7 @@ function plan(a: Analysis): Task[] {
   if (a.kind === 'chaos') {
     if (a.chaosExact) out.push({ id: 'chaosExact', kind: 'chaosExact' });
     else worldTasks(a.moves);
-    for (const m of a.moves) out.push({ id: `p:${mv(m.move)}`, kind: 'chaosPess', move: m.move });
+    if (a.supersetOk) for (const m of a.moves) out.push({ id: `p:${mv(m.move)}`, kind: 'chaosPess', move: m.move });
     return out;
   }
   if (a.kind === 'estimate') {

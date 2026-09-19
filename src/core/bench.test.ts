@@ -65,4 +65,33 @@ describe.skipIf(!enabled)('ベンチマーク: 空の盤面・自分が先攻', 
     );
     expect(rows.full.length).toBe(8);
   }, 600_000);
+
+  it('1 枚後・2 枚後の全窓探索(相手の番/自分の番)', () => {
+    const r = makeRng(43);
+    for (const placed of [1, 2]) {
+      const ms: number[] = [];
+      const nodes: number[] = [];
+      for (let i = 0; i < 12; i++) {
+        const cards: CardDef[] = Array.from({ length: 10 }, () => ({
+          sides: [1 + Math.floor(r() * 10), 1 + Math.floor(r() * 10), 1 + Math.floor(r() * 10), 1 + Math.floor(r() * 10)],
+          type: 0,
+        }));
+        const b = new FastBoard({
+          cards, myHand: [0, 1, 2, 3, 4], oppKnown: [5, 6, 7, 8, 9], oppPool: [], poolQuota: 0,
+          board: Array(9).fill(null), turn: 0, first: 0,
+          ruleBits: toRuleBits({ ...NO_RULES, same: true, plus: true }, { fallenAceInCombo: true }),
+          sign: 0, orderMe: false, orderOpp: false,
+        });
+        for (let k = 0; k < placed; k++) {
+          const moves = legalMoves(b);
+          const m = moves[Math.floor(r() * moves.length)];
+          b.place(m.card, m.cell);
+        }
+        const t = timed(() => negamax(b, -99, 99));
+        ms.push(t.ms);
+        nodes.push(t.nodes);
+      }
+      console.log(`${placed} 枚後: 中央値 ${median(ms).toFixed(1)}ms / ${median(nodes)} nodes、最大 ${Math.max(...ms).toFixed(1)}ms`);
+    }
+  }, 600_000);
 });

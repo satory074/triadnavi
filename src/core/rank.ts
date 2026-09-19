@@ -93,3 +93,23 @@ export function headline(a: Analysis): string {
 export function percent(x: number): string {
   return `${Math.round(x * 100)}%`;
 }
+
+/** 各手に添える副指標の文言(各手に出す数字は、保証クラスとこれの 2 つまで) */
+export function secondaryText(m: MoveEval, a: Analysis): string {
+  if (a.kind === 'chaos') {
+    if (m.chaos) return `勝ち ${percent(m.chaos.win)}、引き分け ${percent(m.chaos.draw)}、負け ${percent(m.chaos.loss)}`;
+    if (m.worlds) return `勝ち ${percent(m.worlds.win / m.worlds.n)}、引き分け ${percent(m.worlds.draw / m.worlds.n)}(${m.worlds.n} 通りの引き順で試算)`;
+    return '';
+  }
+  if (m.worlds) {
+    const head = a.worldsEnumerated ? `相手の手札 ${m.worlds.n} 通りのうち` : `想定した手札 ${m.worlds.n} 通りのうち`;
+    return `${head} 勝ち ${m.worlds.win}、引き分け ${m.worlds.draw}、負け ${m.worlds.loss}`;
+  }
+  if (m.value !== undefined && m.value > 0) return `最終 ${5 + m.value} 対 ${5 - m.value}`;
+  if (m.mistakes && m.mistakes.replies > 0) {
+    const e = m.mistakes;
+    const draw = m.cls === 'loss' ? `、${e.toDrawOrBetter} 通りで引き分け以上` : '';
+    return `相手の応手 ${e.replies} 通りのうち ${e.toWin} 通りで勝ちが確定${draw}`;
+  }
+  return '';
+}

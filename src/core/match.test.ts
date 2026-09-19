@@ -100,9 +100,17 @@ describe('非公開手札', () => {
     expect(v.cards[v.state.board[0]!.card].sides).toEqual([9, 9, 9, 9]);
   });
 
-  it('不明スロットが無ければ、候補や飛び入りのカードは出せない', () => {
+  it('不明スロットが無くても、入力に無いカードは受け付けて食い違いを記録する(入力ミスで詰まないように)', () => {
     const v = replay(baseSetup(), [{ t: 'place', by: 1, card: { from: 'adhoc', card: c(9, 9, 9, 9) }, cell: 0 }]);
-    expect(v.applied).toBe(0);
+    expect(v.applied).toBe(1);
+    expect(v.outOfPool).toBe(true);
+    expect(v.oppUnknown).toBe(0);
+    expect(v.oppKnown.length).toBe(5);
+  });
+
+  it('不明スロットが無ければ、候補のカードは出せない', () => {
+    const s = baseSetup({ oppPool: [c(8, 8, 8, 8)] });
+    expect(replay(s, [{ t: 'place', by: 1, card: { from: 'pool', index: 0 }, cell: 0 }]).applied).toBe(0);
   });
 
   it('cards への添字と CardRef を相互に変換できる', () => {

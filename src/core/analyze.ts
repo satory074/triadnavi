@@ -1,7 +1,7 @@
 import { chaosExact, chaosLeafCount, chaosPessimisticAtLeast, type Dist } from './chaos';
 import type { FastBoard } from './fastEngine';
 import { NEIGHBOUR } from './geometry';
-import { guaranteeKind, toFastBoard, type FastMapping, type GuaranteeKind, type Position } from './position';
+import { guaranteeKind, poolIsSufficient, toFastBoard, type FastMapping, type GuaranteeKind, type Position } from './position';
 import { BIT_REVERSE } from './rules';
 import { countMistakes, exactMove, legalMoves, probeMove, type FastMove, type MistakeCount } from './search';
 import type { Move, Outcome } from './types';
@@ -40,8 +40,8 @@ export interface SolveContext {
 
 export function createContext(pos: Position, worlds: World[]): SolveContext {
   const kind = guaranteeKind(pos);
-  // 候補が足りない時は上位集合の探索ができないので、メインの盤面は作らない
-  const main = kind === 'estimate' ? null : toFastBoard(pos);
+  // 候補が足りない時は上位集合の探索ができない(相手の出すカードが尽きて値が壊れる)ので、メインの盤面は作らない
+  const main = poolIsSufficient(pos) ? toFastBoard(pos) : null;
   return { pos, worlds, kind, main, worldMaps: new Map() };
 }
 

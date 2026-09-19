@@ -284,6 +284,9 @@ describe('カオス', () => {
     const a = analyzeSync(pos, worlds);
     expect(a.chaosExact).toBe(false);
     expect(a.moves.every((m) => m.worlds!.n === worlds.length)).toBe(true);
+    // 候補が足りないので上位集合の探索はできず、「どのカードを引かされても」の保証は出さない
+    expect(a.supersetOk).toBe(false);
+    expect(a.moves.every((m) => m.pessimistic === undefined)).toBe(true);
     expect(recommended(a)).not.toBeNull();
   });
 });

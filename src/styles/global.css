@@ -1,0 +1,991 @@
+/* triadnavi — ゴールドソーサーの対戦卓。
+   見せ場は卓とカードだけ: 金縁の紺緑のマットに、ゲームと同じ青/赤のカード。おすすめの手は金のリング。
+   それ以外のパネルは静かにして、対戦中に目が迷わないようにする。 */
+
+:root {
+  color-scheme: only dark;
+  --mat-950: #07161d;
+  --mat-800: #0d2530;
+  --mat-700: #133342;
+  --mat-600: #1a4355;
+  --mat-line: #265564;
+  --gilt: #d8b35a;
+  --gilt-soft: #9c8142;
+  --blue: #2f6fd6;
+  --blue-deep: #173f8c;
+  --red: #c8453f;
+  --red-deep: #7e2522;
+  --paper: #e6eef0;
+  --paper-dim: #9bb3bc;
+  --good: #7ad6a2;
+  --bad: #f09a93;
+  --font-num: 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
+  --font-display: 'Dela Gothic One', 'Hiragino Kaku Gothic ProN', sans-serif;
+  --font-body: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--paper);
+  background: radial-gradient(130% 80% at 50% 0%, var(--mat-800) 0%, var(--mat-950) 100%) fixed;
+  min-height: 100vh;
+}
+
+#root {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 0.75rem 0.9rem 5rem;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gilt);
+  outline-offset: 2px;
+}
+
+h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 0.55rem;
+  color: var(--gilt);
+}
+
+h3 {
+  font-size: 0.9rem;
+  margin: 0.9rem 0 0.3rem;
+}
+
+p {
+  margin: 0.35rem 0;
+}
+
+.muted {
+  color: var(--paper-dim);
+}
+
+/* ---- ヘッダー/フッター ---- */
+.site-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.8rem;
+  border-bottom: 1px solid var(--mat-line);
+}
+
+.site-head h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.35rem;
+  letter-spacing: 0.02em;
+  margin: 0;
+  color: var(--gilt);
+}
+
+.tagline {
+  margin: 0;
+  color: var(--paper-dim);
+  font-size: 0.8rem;
+  flex: 1;
+}
+
+.site-foot {
+  margin-top: 2.5rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--mat-line);
+  color: var(--paper-dim);
+  font-size: 0.75rem;
+}
+
+.site-foot p {
+  margin: 0.1rem 0;
+}
+
+/* ---- ボタン類 ---- */
+.btn {
+  border: 1px solid var(--mat-line);
+  background: var(--mat-600);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  min-height: 2.75rem;
+}
+
+.btn-primary {
+  width: 100%;
+  border-color: var(--gilt);
+  background: var(--gilt);
+  color: #1d1705;
+  font-weight: 700;
+  font-size: 1.02rem;
+}
+
+.btn-primary:disabled {
+  background: transparent;
+  color: var(--paper-dim);
+  border-color: var(--mat-line);
+  font-weight: 400;
+}
+
+.btn-quiet {
+  border: 0;
+  background: none;
+  color: var(--gilt);
+  padding: 0.35rem 0.4rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: 0.85rem;
+}
+
+.btn-quiet:disabled {
+  color: var(--paper-dim);
+  text-decoration: none;
+}
+
+.btn-quiet.is-on {
+  background: var(--gilt);
+  color: #1d1705;
+  border-radius: 0.35rem;
+  text-decoration: none;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  border: 1px solid var(--mat-line);
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  min-height: 2.4rem;
+  font-size: 0.88rem;
+}
+
+.chip-on {
+  background: var(--gilt);
+  border-color: var(--gilt);
+  color: #1d1705;
+  font-weight: 700;
+}
+
+.chip-static {
+  min-height: 0;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--paper-dim);
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--mat-line);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.segmented button {
+  border: 0;
+  background: transparent;
+  padding: 0.4rem 0.9rem;
+  min-height: 2.4rem;
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--mat-line);
+}
+
+.segmented-big {
+  display: flex;
+}
+
+.segmented-big button {
+  flex: 1;
+  min-height: 2.9rem;
+  font-weight: 700;
+}
+
+.seg-on {
+  background: var(--gilt) !important;
+  color: #1d1705;
+}
+
+.seg-blue {
+  background: var(--blue) !important;
+  color: #fff;
+}
+
+.seg-red {
+  background: var(--red) !important;
+  color: #fff;
+}
+
+.check {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--paper-dim);
+}
+
+.check input {
+  margin-top: 0.3rem;
+  accent-color: var(--gilt);
+}
+
+input[type='search'],
+input:not([type]) {
+  width: 100%;
+  background: var(--mat-950);
+  border: 1px solid var(--mat-line);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  min-height: 2.75rem;
+}
+
+.note {
+  font-size: 0.82rem;
+  color: var(--paper-dim);
+}
+
+.note-warn {
+  color: var(--paper);
+  border-left: 3px solid var(--gilt);
+  padding-left: 0.6rem;
+}
+
+/* ---- 設定画面 ---- */
+.setup {
+  max-width: 34rem;
+  margin: 0 auto;
+}
+
+.setup section {
+  margin-bottom: 1.6rem;
+}
+
+.result-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  border: 1px solid var(--mat-line);
+  border-radius: 0.5rem;
+}
+
+.result-list li + li {
+  border-top: 1px solid var(--mat-line);
+}
+
+.result-list button,
+.deck-load {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 0.6rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0.5rem 0.7rem;
+  min-height: 2.75rem;
+}
+
+.result-list button:hover,
+.deck-load:hover {
+  background: var(--mat-700);
+}
+
+.result-name {
+  font-weight: 700;
+}
+
+.result-sides {
+  color: var(--paper-dim);
+  font-size: 0.82rem;
+  font-family: var(--font-num);
+  letter-spacing: 0.04em;
+}
+
+.result-type {
+  grid-column: 1 / -1;
+  color: var(--paper-dim);
+  font-size: 0.78rem;
+}
+
+.result-empty {
+  padding: 0.6rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.npc-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 1.05rem;
+}
+
+.decks {
+  margin-top: 0.7rem;
+}
+
+.deck-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  border: 1px solid var(--mat-line);
+  border-radius: 0.5rem;
+}
+
+.deck-list li {
+  display: flex;
+  align-items: center;
+}
+
+.deck-list li + li {
+  border-top: 1px solid var(--mat-line);
+}
+
+.deck-load {
+  grid-template-columns: 1fr;
+  flex: 1;
+  min-width: 0;
+}
+
+.deck-load .result-sides {
+  font-family: var(--font-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deck-save {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.deck-save input {
+  flex: 1;
+}
+
+.pool {
+  margin-top: 0.9rem;
+  padding-top: 0.2rem;
+  border-top: 1px solid var(--mat-line);
+}
+
+.pool-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(3.6rem, 1fr));
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.pool-pick {
+  grid-template-columns: repeat(auto-fill, minmax(4.6rem, 1fr));
+}
+
+.pool-name {
+  font-size: 0.68rem;
+  color: var(--paper-dim);
+  text-align: center;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.prior {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  font-size: 0.82rem;
+  color: var(--paper-dim);
+}
+
+.start-bar {
+  position: sticky;
+  bottom: 0;
+  padding: 0.7rem 0;
+  background: linear-gradient(to top, var(--mat-950) 70%, transparent);
+}
+
+/* ---- カード ---- */
+.hand-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.4rem;
+}
+
+.hand-opp {
+  max-width: 19rem;
+  margin: 0 auto 0.6rem;
+  align-items: center;
+}
+
+.hand-my {
+  margin-top: 0.7rem;
+}
+
+.hand-extra {
+  text-align: center;
+  margin: -0.3rem 0 0.4rem;
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.slot-action {
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--paper-dim);
+}
+
+.card {
+  container-type: inline-size;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 9%/7%;
+  color: #fff;
+  overflow: hidden;
+}
+
+.owner-0 {
+  background: linear-gradient(160deg, var(--blue) 0%, var(--blue-deep) 100%);
+}
+
+.owner-1 {
+  background: linear-gradient(160deg, var(--red) 0%, var(--red-deep) 100%);
+}
+
+.owner-none {
+  background: var(--mat-600);
+}
+
+.card-hidden {
+  background: repeating-linear-gradient(45deg, var(--red-deep) 0 6px, #5f1c1a 6px 12px);
+}
+
+.card-empty {
+  background: rgba(47, 111, 214, 0.12);
+  border: 1px dashed var(--blue);
+}
+
+.card-unknown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 44cqw;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.card-sides {
+  position: absolute;
+  inset: 6% 8% 24%;
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  place-items: center;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 27cqw;
+  line-height: 1;
+  text-shadow: 0 0 2px #000, 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
+}
+
+.card-sm .card-sides {
+  inset: 8%;
+  font-size: 30cqw;
+}
+
+.side-0 { grid-area: 1 / 2; }
+.side-3 { grid-area: 2 / 1; }
+.side-1 { grid-area: 2 / 3; }
+.side-2 { grid-area: 3 / 2; }
+
+.side-up { color: #b9f5cf; }
+.side-down { color: #ffc9c4; }
+
+.side-active {
+  color: var(--gilt);
+  animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0.25; }
+}
+
+.card-name {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: 4%;
+  font-size: 11.5cqw;
+  line-height: 1.15;
+  text-align: center;
+  max-height: 2.3em;
+  overflow: hidden;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
+}
+
+.card-type {
+  position: absolute;
+  top: 3%;
+  right: 4%;
+  font-size: 12cqw;
+  padding: 0 0.25em;
+  border-radius: 0.3em;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* なぜ裏返ったかの表示。数字と重ならないよう、カード下端の帯にする(この時は名前を出さない) */
+.card-badge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font-size: 12.5cqw;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+  background: var(--gilt);
+  color: #1d1705;
+}
+
+.is-selected {
+  outline: 3px solid #fff;
+  outline-offset: 1px;
+}
+
+.is-recommended {
+  box-shadow: 0 0 0 3px var(--gilt), 0 0 14px 2px rgba(216, 179, 90, 0.65);
+}
+
+.is-dimmed {
+  opacity: 0.55;
+}
+
+/* ---- 盤面 ---- */
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+  padding: 0.55rem;
+  border-radius: 0.6rem;
+  background:
+    linear-gradient(var(--mat-700), var(--mat-700)) padding-box,
+    linear-gradient(135deg, var(--gilt) 0%, var(--gilt-soft) 45%, var(--gilt) 100%) border-box;
+  border: 3px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.board-fix {
+  border-style: dashed;
+}
+
+.cell {
+  aspect-ratio: 4 / 5;
+  border-radius: 9%/7%;
+  min-width: 0;
+}
+
+.cell-empty {
+  border: 1px dashed var(--gilt-soft);
+  background: rgba(0, 0, 0, 0.22);
+  padding: 0;
+}
+
+.cell-open {
+  border-style: solid;
+  background: rgba(216, 179, 90, 0.08);
+}
+
+.cell-empty.is-recommended {
+  border: 2px solid var(--gilt);
+  background: rgba(216, 179, 90, 0.2);
+}
+
+.cell-last .card {
+  border-color: #fff;
+}
+
+.cell-flipped .card {
+  animation: flip 0.45s ease-out;
+}
+
+/* 裏返りの合図。開始時点でもカードが読める演出にする(非表示のタブではアニメーションが開始時点で止まるため、
+   横向きから始める回転だとカードが見えなくなる) */
+@keyframes flip {
+  from { transform: scale(0.88); filter: brightness(1.9); }
+  to { transform: scale(1); filter: brightness(1); }
+}
+
+.prompt {
+  text-align: center;
+  font-weight: 700;
+  margin: 0.6rem 0 0;
+  min-height: 1.6em;
+}
+
+/* ---- 対局画面の配置 ---- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.3rem 0.8rem;
+  margin-bottom: 0.6rem;
+}
+
+.rule-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.table-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.table-side {
+  width: 100%;
+  max-width: 26rem;
+  margin: 0 auto;
+}
+
+@media (min-width: 56rem) {
+  .table-layout {
+    grid-template-columns: 26rem 1fr;
+    align-items: start;
+  }
+
+  .table-side {
+    position: sticky;
+    top: 0.75rem;
+  }
+}
+
+.panel {
+  background: var(--mat-700);
+  border: 1px solid var(--mat-line);
+  border-radius: 0.6rem;
+  padding: 0.9rem;
+}
+
+.panel + .panel {
+  margin-top: 1rem;
+}
+
+/* ---- 解析 ---- */
+.analysis-head {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.kind {
+  flex: none;
+  font-weight: 700;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.3rem;
+  border: 1px solid var(--gilt);
+  color: var(--gilt);
+}
+
+.kind-estimate,
+.kind-chaos {
+  border-color: var(--paper-dim);
+  color: var(--paper-dim);
+}
+
+.headline {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.best {
+  margin: 0.8rem 0;
+}
+
+.best-move {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.best-cell {
+  color: var(--gilt);
+}
+
+.best-to {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--paper-dim);
+  margin: 0 0.25em;
+}
+
+.best-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+  font-size: 0.88rem;
+  margin: 0.3rem 0 0.7rem;
+}
+
+.pess {
+  font-size: 0.85rem;
+  color: var(--good);
+}
+
+.cls {
+  font-weight: 700;
+}
+
+.cls-win { color: var(--good); }
+.cls-draw { color: var(--gilt); }
+.cls-loss,
+.cls-notWin { color: var(--bad); }
+
+.progress {
+  font-size: 0.78rem;
+  color: var(--paper-dim);
+}
+
+.progress progress {
+  width: 5rem;
+  height: 0.5rem;
+  vertical-align: middle;
+  accent-color: var(--gilt);
+}
+
+.moves {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+  margin-top: 0.6rem;
+}
+
+.moves th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--paper-dim);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem 0.2rem 0;
+}
+
+.moves td {
+  padding: 0.4rem 0.4rem 0.4rem 0;
+  border-top: 1px solid var(--mat-line);
+  vertical-align: top;
+}
+
+.moves td:nth-child(2) {
+  white-space: nowrap;
+}
+
+.row-best td:first-child {
+  box-shadow: inset 3px 0 0 var(--gilt);
+  padding-left: 0.5rem;
+}
+
+/* ---- 結果 ---- */
+.result {
+  text-align: center;
+}
+
+.result-title {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.result-win .result-title { color: var(--good); }
+.result-draw .result-title { color: var(--gilt); }
+.result-loss .result-title { color: var(--bad); }
+
+.result-score {
+  font-family: var(--font-num);
+  font-size: 1.4rem;
+  margin: 0 0 0.8rem;
+}
+
+.rematch {
+  text-align: left;
+  font-size: 0.85rem;
+  margin-bottom: 0.8rem;
+}
+
+/* ---- モーダルとカード入力 ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: rgba(3, 12, 16, 0.72);
+  display: grid;
+  place-items: end center;
+}
+
+.modal {
+  width: 100%;
+  max-width: 30rem;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--mat-800);
+  border: 1px solid var(--mat-line);
+  border-bottom: 0;
+  border-radius: 0.9rem 0.9rem 0 0;
+  padding: 0.9rem 1rem 1.2rem;
+}
+
+@media (min-width: 40rem) {
+  .modal-backdrop {
+    place-items: center;
+  }
+
+  .modal {
+    border-bottom: 1px solid var(--mat-line);
+    border-radius: 0.9rem;
+  }
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.modal-head h2 {
+  margin: 0;
+}
+
+.editor-preview {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.editor-preview .card {
+  width: 6.2rem;
+  flex: none;
+}
+
+.editor-hint {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+
+.key {
+  border: 1px solid var(--mat-line);
+  background: var(--mat-600);
+  border-radius: 0.5rem;
+  min-height: 3.2rem;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+
+.key:active {
+  background: var(--gilt);
+  color: #1d1705;
+}
+
+.key-wide {
+  grid-column: span 2;
+}
+
+.key-back {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.editor-choice {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.editor-search {
+  margin-top: 1rem;
+}
+
+.editor-search label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--paper-dim);
+  margin-bottom: 0.25rem;
+}
+
+.help {
+  font-size: 0.88rem;
+}
+
+.help h3 {
+  color: var(--gilt);
+}
+
+.help ul {
+  padding-left: 1.2rem;
+  margin: 0.3rem 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

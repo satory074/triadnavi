@@ -1,5 +1,5 @@
 import { chaosExactFeasible, createContext, rootMoves, runTask } from './analyze';
-import { guaranteeKind, positionKey, type Position } from './position';
+import { guaranteeKind, poolIsSufficient, positionKey, type Position } from './position';
 import { applyResult, createAnalysis, markIssued, nextTasks, type Analysis } from './scheduler';
 import type { World } from './worlds';
 
@@ -12,6 +12,7 @@ export function startAnalysis(pos: Position, worlds: readonly World[]): Analysis
     worlds.length,
     worlds.every((w) => w.enumerated),
     chaosExactFeasible(pos),
+    poolIsSufficient(pos),
   );
 }
 
