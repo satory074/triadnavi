@@ -546,10 +546,16 @@ input:not([type]) {
   margin: 0.7rem 0;
   padding: 0.6rem 0;
   border-block: 1px solid var(--mat-line);
-  position: sticky;
-  top: 0;
-  z-index: 2;
   background: var(--mat-800);
+}
+
+/* 絞り込みは 4 行あるので、縦に余裕がある画面でだけ上に固定する(小さいスマホではカードが見えなくなる) */
+@media (min-height: 800px) {
+  .coll-filters {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
 }
 
 .coll-row {
