@@ -1,6 +1,7 @@
+import type { Matchup } from './deckEval';
 import type { MatchEvent, MatchSetup } from './match';
 import { parseCard, sameCard } from './presets';
-import { rulesFromIds } from './rules';
+import { RULE_ID, rulesFromIds } from './rules';
 import type { CardDef, Player } from './types';
 
 /** アプリ全体の状態。ブラウザに保存し、再読み込みで対局を失わないようにする */
@@ -125,6 +126,23 @@ export function draftToSetup(draft: SetupDraft): MatchSetup | null {
     round: 0,
     oppOrderKnown: draft.oppOrderKnown,
     npcId: draft.npcId ?? undefined,
+  };
+}
+
+/**
+ * デッキの評価に使う対戦条件。ルーレットとスワップは下書きのルールには入らない(対戦が始まってから決まる)ので、
+ * NPC の固定ルールから受け取る。NPC を選んでいない時は空でよい。
+ */
+export function matchupFromDraft(draft: SetupDraft, npcRules: readonly number[]): Matchup {
+  const oppKnown = draft.oppCards.filter((c): c is CardDef => c !== null);
+  return {
+    ruleIds: draft.ruleIds,
+    options: { fallenAceInCombo: draft.fallenAceInCombo },
+    oppKnown,
+    oppPool: draft.oppPool,
+    oppUnknown: 5 - oppKnown.length,
+    roulette: npcRules.filter((id) => id === RULE_ID.roulette).length,
+    swap: npcRules.includes(RULE_ID.swap),
   };
 }
 

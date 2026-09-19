@@ -47,7 +47,15 @@ export default function App() {
           onSaved={setSaved}
         />
       ) : (
-        <SetupScreen draft={app.draft} saved={saved} onDraft={(draft) => setApp((s) => ({ ...s, draft }))} onSaved={setSaved} onStart={start} />
+        <SetupScreen
+          draft={app.draft}
+          saved={saved}
+          collection={collection}
+          onDraft={(draft) => setApp((s) => ({ ...s, draft }))}
+          onSaved={setSaved}
+          onStart={start}
+          onOpenCollection={() => setCollecting(true)}
+        />
       )}
 
       <footer className="site-foot">

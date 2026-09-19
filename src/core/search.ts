@@ -82,6 +82,15 @@ export function legalMoves(b: FastBoard, forcedCard = -1): FastMove[] {
   return moves;
 }
 
+/**
+ * 自分(プレイヤー 0)から見た値が threshold 以上か。手番がどちらでも使える幅ゼロの窓の探り。
+ * 相手の手番では、相手から見た値が -threshold 以下かを調べる。
+ */
+export function myValueAtLeast(b: FastBoard, threshold: number): boolean {
+  if (b.turn === 0) return negamax(b, threshold - 1, threshold) >= threshold;
+  return -negamax(b, -threshold, -threshold + 1) >= threshold;
+}
+
 /** 手 m の値が threshold 以上か(幅ゼロの窓の探り)。値は手番側の視点 */
 export function probeMove(b: FastBoard, m: FastMove, threshold: number): boolean {
   const flips = b.place(m.card, m.cell);

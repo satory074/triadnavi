@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FastBoard, type FastSetup } from './fastEngine';
 import { makeRng, type Rng } from './rng';
 import { toRuleBits, typeSign } from './rules';
-import { bruteForce, countMistakes, exactMove, legalMoves, negamax, probeMove } from './search';
+import { bruteForce, countMistakes, exactMove, legalMoves, myValueAtLeast, negamax, probeMove } from './search';
 import type { CardDef, CardType, Player, RuleSet } from './types';
 
 const ALPHABETS = [
@@ -68,6 +68,22 @@ function advance(b: FastBoard, r: Rng, k: number): void {
     b.place(m.card, m.cell);
   }
 }
+
+describe('myValueAtLeast', () => {
+  it('どちらの手番でも、全探索で求めた自分の値としきい値の比較に一致する', () => {
+    const r = makeRng(21);
+    for (let i = 0; i < 300; i++) {
+      const first = (r() < 0.5 ? 0 : 1) as Player;
+      const b = new FastBoard(setupOf(randomCards(r, 10, true), randomRules(r), first));
+      advance(b, r, 4 + Math.floor(r() * 2));
+      const before = b.snapshot();
+      const v = bruteForce(b);
+      const mine = b.turn === 0 ? v : -v;
+      for (const t of [1, 0, -1, 2]) expect(myValueAtLeast(b, t), `#${i} t=${t}`).toBe(mine >= t);
+      expect(b.snapshot()).toBe(before);
+    }
+  });
+});
 
 describe('negamax', () => {
   it('枝刈りなしの全探索と一致し、探索後に盤面が変わらない(重複カード・オーダーを含む)', () => {

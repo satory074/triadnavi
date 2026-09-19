@@ -4,7 +4,7 @@ import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, type M
 import { guaranteeKind, placedCount, positionKey, type Position } from '../core/position';
 import { learnCards, type SavedData } from '../core/presets';
 import { recommended } from '../core/rank';
-import { makeRng } from '../core/rng';
+import { hashSeed, makeRng } from '../core/rng';
 import { RULE_NAMES, ruleIdsOf, typeSign } from '../core/rules';
 import type { MoveEval } from '../core/scheduler';
 import { buildRematch, MAX_REMATCHES } from '../core/suddenDeath';
@@ -27,12 +27,6 @@ interface Props {
   onRematch: (next: MatchSetup) => void;
   onNewMatch: () => void;
   onSaved: (next: SavedData) => void;
-}
-
-function hash(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  return h >>> 0;
 }
 
 export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRematch, onNewMatch, onSaved }: Props) {
@@ -62,7 +56,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
     const kind = guaranteeKind(position);
     if (kind === 'exact') return [];
     const opt = {
-      rng: makeRng(hash(key)),
+      rng: makeRng(hashSeed(key)),
       maxEnumerate: 30,
       // 序盤は 1 つの世界を解くのが重いので、サンプル数を抑える
       samples: placedCount(position) < 2 ? 8 : 24,

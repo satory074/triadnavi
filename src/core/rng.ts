@@ -11,3 +11,10 @@ export function makeRng(seed: number): Rng {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/** 文字列からシードを作る(FNV-1a)。局面や対戦条件のキーから作れば、同じ条件では同じ乱数列になる */
+export function hashSeed(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}

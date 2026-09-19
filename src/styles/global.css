@@ -436,6 +436,89 @@ input:not([type]) {
   background: linear-gradient(to top, var(--mat-950) 70%, transparent);
 }
 
+/* ---- デッキの評価と提案 ---- */
+.advisor {
+  margin-top: 1rem;
+  padding-top: 0.2rem;
+  border-top: 1px solid var(--mat-line);
+}
+
+.advisor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.advisor-result {
+  margin-top: 0.8rem;
+}
+
+.advisor-deck {
+  margin: 0.8rem 0;
+  padding: 0.7rem;
+  border: 1px solid var(--mat-line);
+  border-radius: 0.6rem;
+  background: var(--mat-800);
+}
+
+.advisor-deck:first-of-type {
+  border-color: var(--gilt-soft);
+}
+
+.advisor-deck-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.advisor-deck-head .muted {
+  flex: 1;
+  font-size: 0.78rem;
+}
+
+.advisor-deck-head strong {
+  color: var(--gilt);
+}
+
+.advisor-lines {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  font-size: 0.88rem;
+}
+
+.cls-plain {
+  color: var(--paper-dim);
+}
+
+.advisor-table {
+  width: 100%;
+  margin-top: 0.6rem;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.advisor-table th,
+.advisor-table td {
+  padding: 0.25rem 0.3rem;
+  border-top: 1px solid var(--mat-line);
+  text-align: right;
+}
+
+.advisor-table th:first-child,
+.advisor-table td:first-child {
+  text-align: left;
+}
+
+.advisor-table th {
+  color: var(--paper-dim);
+  font-weight: 400;
+}
+
 /* ---- 手持ちの登録 ---- */
 .collection {
   max-width: 52rem;

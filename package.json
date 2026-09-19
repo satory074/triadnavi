@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "bench": "VITE_BENCH=1 vitest run src/core/bench.test.ts",
+    "bench": "VITE_BENCH=1 vitest run src/core/bench.test.ts --silent=false --reporter=verbose",
+    "bench:deck": "VITE_BENCH=1 vitest run src/core/deckBench.test.ts --silent=false --reporter=verbose",
     "data:update": "node scripts/fetch-data.mjs",
     "preview": "vite preview"
   },

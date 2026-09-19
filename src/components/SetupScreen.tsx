@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   applyNpc, clearNpc, clearOppSlot, revealPoolCard, setupProblems, setupWarnings, toggleRule, type SetupDraft,
 } from '../core/appState';
-import { DECK_PROBLEM_TEXT } from '../core/collection';
+import { DECK_PROBLEM_TEXT, type Collection } from '../core/collection';
 import type { SavedData, SavedDeck } from '../core/presets';
 import { sameCard } from '../core/presets';
 import { rulesFromIds } from '../core/rules';
@@ -10,6 +10,7 @@ import type { CardDef } from '../core/types';
 import { handProblems, npcById, npcCards, toCardDef, type NpcInfo } from '../data';
 import { CardEditor } from './CardEditor';
 import { CardView } from './CardView';
+import { DeckAdvisor } from './DeckAdvisor';
 import { DeckPicker } from './DeckPicker';
 import { NpcPicker } from './NpcPicker';
 import { OpponentPanel } from './OpponentPanel';
@@ -18,14 +19,16 @@ import { RuleChips } from './RuleChips';
 interface Props {
   draft: SetupDraft;
   saved: SavedData;
+  collection: Collection;
   onDraft: (next: SetupDraft) => void;
   onSaved: (next: SavedData) => void;
   onStart: () => void;
+  onOpenCollection: () => void;
 }
 
 type Target = { kind: 'my'; slot: number } | { kind: 'opp'; slot: number } | { kind: 'pool' };
 
-export function SetupScreen({ draft, saved, onDraft, onSaved, onStart }: Props) {
+export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStart, onOpenCollection }: Props) {
   const [target, setTarget] = useState<Target | null>(null);
   const rules = rulesFromIds(draft.ruleIds);
   const typeMatters = rules.typeShift !== 'none';
@@ -111,6 +114,13 @@ export function SetupScreen({ draft, saved, onDraft, onSaved, onStart }: Props) 
           onLoad={(d) => onDraft({ ...draft, myCards: d.cards })}
           onSave={saveDeck}
           onDelete={(id) => onSaved({ ...saved, decks: saved.decks.filter((d) => d.id !== id) })}
+        />
+        <DeckAdvisor
+          draft={draft}
+          collection={collection}
+          savedDecks={saved.decks}
+          onUse={(cards) => onDraft({ ...draft, myCards: cards })}
+          onOpenCollection={onOpenCollection}
         />
       </section>
 
