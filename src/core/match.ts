@@ -28,10 +28,13 @@ export type CardRef =
   | { from: 'my'; index: number }
   | { from: 'opp'; index: number }
   | { from: 'pool'; index: number }
-  /** reveal で開いたカード(index = 何番目の reveal か) */
+  /** 対局中に分かったカード(index = view.revealed の何番目か) */
   | { from: 'revealed'; index: number }
   /** 相手が候補リストに無いカードを出した */
   | { from: 'adhoc'; card: CardDef };
+
+/** スワップで相手から来たカードの指定(自分の手札からは来ない) */
+export type SwapRef = Exclude<CardRef, { from: 'my' }>;
 
 /** 相手の不明スロットを 1 枚開く時の指定。候補リストから選ぶか、数字を手入力する */
 export type RevealRef =
@@ -42,6 +45,8 @@ export type MatchEvent =
   | { t: 'place'; by: Player; card: CardRef; cell: number }
   /** オールオープン等で見えている相手の手札を、出される前に開く */
   | { t: 'reveal'; card: RevealRef }
+  /** スワップ: 自分の手札 mine(setup.myHand の添字)と、相手の 1 枚を入れ替える */
+  | { t: 'swap'; mine: number; theirs: SwapRef }
   /** エンジンの計算が実機と食い違った時の手動修正 */
   | { t: 'setOwner'; cell: number; owner: Player };
 
@@ -53,7 +58,10 @@ export interface MatchView {
   oppKnown: number[];
   oppPool: number[];
   oppUnknown: number;
-  /** 対局中に開いた相手のカード(cards への添字。reveal イベントの順) */
+  /**
+   * 対局中に手札の中身が分かった/入れ替わったカード(cards への添字。イベントの順)。
+   * 設定の時点では持ち主が決まっていないので、CardRef の 'revealed' で参照する
+   */
   revealed: number[];
   turn: Player;
   placed: number;
@@ -134,6 +142,39 @@ export function replay(setup: MatchSetup, events: readonly MatchEvent[]): MatchV
       continue;
     }
 
+    if (ev.t === 'swap') {
+      const mi = myIdx[ev.mine] ?? -1;
+      if (!myHand.includes(mi)) break;
+      let ti = -1;
+      const ref = ev.theirs;
+      if (ref.from === 'opp') {
+        ti = oppIdx[ref.index] ?? -1;
+        if (!oppKnown.includes(ti)) break;
+      } else if (ref.from === 'revealed') {
+        ti = revealed[ref.index] ?? -1;
+        if (!oppKnown.includes(ti)) break;
+      } else if (ref.from === 'pool') {
+        ti = poolIdx[ref.index] ?? -1;
+        if (!oppPool.includes(ti) || oppUnknown <= 0) break;
+        oppPool = oppPool.filter((i) => i !== ti);
+        oppUnknown--;
+      } else if (ref.from === 'adhoc') {
+        if (oppUnknown <= 0) break;
+        ti = cards.push(ref.card) - 1;
+        state = { ...state, cards };
+        if (setup.oppPool.length > 0) outOfPool = true;
+        oppUnknown--;
+      } else {
+        break;
+      }
+      // 来たカードは、渡したカードと同じ位置に入るものとする(オーダーの並びに効く。実機未確認)
+      myHand = myHand.map((i) => (i === mi ? ti : i));
+      oppKnown = oppKnown.includes(ti) ? oppKnown.map((i) => (i === ti ? mi : i)) : [...oppKnown, mi];
+      for (const i of [ti, mi]) if (!revealed.includes(i)) revealed.push(i);
+      applied++;
+      continue;
+    }
+
     if (placed >= 9 || ev.by !== turn || ev.cell < 0 || ev.cell > 8 || state.board[ev.cell]) break;
     let idx = -1;
     const ref = ev.card;
@@ -145,10 +186,12 @@ export function replay(setup: MatchSetup, events: readonly MatchEvent[]): MatchV
       idx = oppIdx[ref.index] ?? -1;
       if (!oppKnown.includes(idx)) break;
       oppKnown = oppKnown.filter((i) => i !== idx);
-    } else if (ref.from === 'revealed' && ev.by === 1) {
+    } else if (ref.from === 'revealed') {
       idx = revealed[ref.index] ?? -1;
-      if (!oppKnown.includes(idx)) break;
-      oppKnown = oppKnown.filter((i) => i !== idx);
+      // スワップで持ち主が変わるので、どちらの手札にあるかで判断する
+      if (ev.by === 0 && myHand.includes(idx)) myHand = myHand.filter((i) => i !== idx);
+      else if (ev.by === 1 && oppKnown.includes(idx)) oppKnown = oppKnown.filter((i) => i !== idx);
+      else break;
     } else if (ref.from === 'pool' && ev.by === 1) {
       idx = poolIdx[ref.index] ?? -1;
       if (!oppPool.includes(idx) || oppUnknown <= 0) break;
@@ -209,7 +252,7 @@ export function toPosition(setup: MatchSetup, view: MatchView, forcedCard?: numb
     rules: forcedMode ? { ...setup.rules, pick: 'chaos' } : setup.rules,
     options: setup.options,
     forcedCard: forcedMode ? forcedCard : undefined,
-    // 対局中に開いたカードは oppKnown の末尾に付くので、入力順 = 出す順という前提は使えない
+    // 対局中に手札が変わったら(開く/スワップ)、入力順 = 出す順という前提は使えない
     oppOrderKnown: setup.oppOrderKnown && setup.round === 0 && view.revealed.length === 0,
   };
 }
@@ -222,7 +265,7 @@ export function orderForcedCard(setup: MatchSetup, view: MatchView): number | nu
 
 /** cards への添字から、イベントに記録する CardRef を作る */
 export function cardRefOf(setup: MatchSetup, cardIndex: number, revealed: readonly number[] = []): CardRef | null {
-  // 開いたカードは候補リストの添字と重なる(候補から開いた場合)ので、先に見る
+  // 対局中に分かったカードは候補リストの添字と重なるので、先に見る
   const r = revealed.indexOf(cardIndex);
   if (r >= 0) return { from: 'revealed', index: r };
   const nMy = setup.myHand.length;

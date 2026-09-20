@@ -169,6 +169,89 @@ describe('非公開手札', () => {
   });
 });
 
+describe('スワップ', () => {
+  const hidden = () =>
+    baseSetup({
+      oppSlots: [c(1, 2, 1, 1), c(3, 3, 4, 5), null, null, null],
+      oppPool: [c(2, 9, 2, 2), c(6, 6, 6, 6), c(7, 7, 7, 7), c(8, 8, 8, 8)],
+    });
+  const hand = (v: ReturnType<typeof replay>, which: 'myHand' | 'oppKnown') => v[which].map((i) => v.cards[i]);
+
+  it('相手の分かっているカードと入れ替える(どちらも元の位置に入る)', () => {
+    const s = baseSetup();
+    const v = replay(s, [{ t: 'swap', mine: 1, theirs: { from: 'opp', index: 2 } }]);
+    expect(v.applied).toBe(1);
+    expect(hand(v, 'myHand')).toEqual([s.myHand[0], s.oppSlots[2], s.myHand[2], s.myHand[3], s.myHand[4]]);
+    expect(hand(v, 'oppKnown')).toEqual([s.oppSlots[0], s.oppSlots[1], s.myHand[1], s.oppSlots[3], s.oppSlots[4]]);
+    expect(v.oppUnknown).toBe(0);
+  });
+
+  it('交換したカードは、対局中それぞれの持ち主として出せる', () => {
+    const s = baseSetup();
+    const v = replay(s, [
+      { t: 'swap', mine: 1, theirs: { from: 'opp', index: 2 } },
+      // revealed = [来たカード, 渡したカード]
+      { t: 'place', by: 1, card: { from: 'revealed', index: 1 }, cell: 0 },
+      { t: 'place', by: 0, card: { from: 'revealed', index: 0 }, cell: 1 },
+    ]);
+    expect(v.applied).toBe(3);
+    expect(v.cards[v.state.board[0]!.card]).toEqual(s.myHand[1]);
+    expect(v.cards[v.state.board[1]!.card]).toEqual(s.oppSlots[2]);
+    expect(v.myHand.length).toBe(4);
+    expect(v.oppKnown.length).toBe(4);
+  });
+
+  it('裏向きのカードと入れ替えると、不明スロットが 1 つ減る', () => {
+    const s = hidden();
+    const v = replay(s, [{ t: 'swap', mine: 0, theirs: { from: 'pool', index: 1 } }]);
+    expect(v.applied).toBe(1);
+    expect(hand(v, 'myHand')[0]).toEqual(s.oppPool[1]);
+    expect(v.oppUnknown).toBe(2);
+    expect(v.oppPool.length).toBe(3);
+    expect(hand(v, 'oppKnown')).toContainEqual(s.myHand[0]);
+    expect(v.outOfPool).toBe(false);
+  });
+
+  it('候補リストに無いカードが来たら、保証が無効だったことを記録する', () => {
+    const v = replay(hidden(), [{ t: 'swap', mine: 0, theirs: { from: 'adhoc', card: c(9, 9, 9, 9) } }]);
+    expect(v.applied).toBe(1);
+    expect(v.oppUnknown).toBe(2);
+    expect(v.outOfPool).toBe(true);
+    expect(hand(v, 'myHand')[0].sides).toEqual([9, 9, 9, 9]);
+  });
+
+  it('開いたカードとも入れ替えられる', () => {
+    const s = hidden();
+    const v = replay(s, [
+      { t: 'reveal', card: { from: 'pool', index: 0 } },
+      { t: 'swap', mine: 2, theirs: { from: 'revealed', index: 0 } },
+    ]);
+    expect(v.applied).toBe(2);
+    expect(hand(v, 'myHand')[2]).toEqual(s.oppPool[0]);
+    expect(hand(v, 'oppKnown')).toContainEqual(s.myHand[2]);
+    expect(v.oppUnknown).toBe(2);
+  });
+
+  it('自分の手札に無いカード、相手が持っていないカード、不明スロットが無い手入力は捨てる', () => {
+    const s = baseSetup();
+    const twice: MatchEvent[] = [
+      { t: 'swap', mine: 1, theirs: { from: 'opp', index: 2 } },
+      { t: 'swap', mine: 1, theirs: { from: 'opp', index: 3 } },
+    ];
+    expect(replay(s, twice).applied).toBe(1);
+    expect(replay(s, [{ t: 'swap', mine: 9, theirs: { from: 'opp', index: 0 } }]).applied).toBe(0);
+    // 相手の手札が全て分かっているなら、リストに無いカードは来ない(入力ミス)
+    expect(replay(s, [{ t: 'swap', mine: 0, theirs: { from: 'adhoc', card: c(9, 9, 9, 9) } }]).applied).toBe(0);
+  });
+
+  it('スワップしたら、相手の並び順の前提は使わない', () => {
+    const s = baseSetup({ rules: { ...NO_RULES, pick: 'order' }, oppOrderKnown: true });
+    expect(toPosition(s, replay(s, [])).oppOrderKnown).toBe(true);
+    const v = replay(s, [{ t: 'swap', mine: 0, theirs: { from: 'opp', index: 0 } }]);
+    expect(toPosition(s, v).oppOrderKnown).toBe(false);
+  });
+});
+
 describe('オーダーとカオス', () => {
   it('オーダーでは先頭の未使用カードが強制される', () => {
     const s = baseSetup({ rules: { ...NO_RULES, pick: 'order' }, first: 0 });

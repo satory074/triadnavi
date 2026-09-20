@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { chaosExactFeasible } from '../core/analyze';
-import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, type MatchEvent, type MatchSetup, type RevealRef } from '../core/match';
+import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, type MatchEvent, type MatchSetup, type RevealRef, type SwapRef } from '../core/match';
 import { guaranteeKind, placedCount, positionKey, type Position } from '../core/position';
 import { learnCards, type SavedData } from '../core/presets';
 import { recommended } from '../core/rank';
@@ -32,9 +32,12 @@ interface Props {
 export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRematch, onNewMatch, onSaved }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const [adhoc, setAdhoc] = useState<CardDef | null>(null);
-  // reveal = 相手の裏向きの手札を開く、mismatch = 入力した手札と違うカードが出た
-  const [picker, setPicker] = useState<'reveal-pool' | 'reveal-editor' | 'mismatch' | null>(null);
+  // reveal = 相手の裏向きの手札を開く、swap = スワップで来たカードを選ぶ、mismatch = 入力した手札と違うカードが出た
+  const [picker, setPicker] = useState<'reveal-pool' | 'reveal-editor' | 'swap-pool' | 'swap-editor' | 'mismatch' | null>(null);
   const [fixMode, setFixMode] = useState(false);
+  const [swapMode, setSwapMode] = useState(false);
+  // スワップで相手から来たカード(渡す自分のカードを選ぶまで確定しない)
+  const [swapIn, setSwapIn] = useState<{ ref: SwapRef; card: CardDef; index: number } | null>(null);
   const [copied, setCopied] = useState(false);
 
   const view = useMemo(() => replay(setup, events), [setup, events]);
@@ -103,13 +106,38 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
 
   const openReveal = () => setPicker(view.oppPool.length > 0 ? 'reveal-pool' : 'reveal-editor');
 
+  const toggleSwap = () => {
+    setFixMode(false);
+    setSwapIn(null);
+    setSwapMode(!swapMode);
+    reset();
+  };
+
+  /** スワップ: 相手から来たカードを決める(まだ確定しない) */
+  const takeFromOpp = (cardIndex: number) => {
+    const ref = cardRefOf(setup, cardIndex, view.revealed);
+    if (!ref || ref.from === 'my') return;
+    setSwapIn({ ref, card: view.cards[cardIndex], index: cardIndex });
+    setPicker(null);
+  };
+
+  /** スワップ: 相手に渡した自分のカードを決めて、入れ替えを確定する */
+  const giveMyCard = (cardIndex: number) => {
+    const ref = cardRefOf(setup, cardIndex, view.revealed);
+    if (!swapIn || ref?.from !== 'my') return;
+    onEvents([...events.slice(0, view.applied), { t: 'swap', mine: ref.index, theirs: swapIn.ref }]);
+    setSwapMode(false);
+    setSwapIn(null);
+    reset();
+  };
+
   const onCell = (cell: number) => {
     const c = view.state.board[cell];
     if (fixMode) {
       if (c) onEvents([...events.slice(0, view.applied), { t: 'setOwner', cell, owner: (c.owner ^ 1) as Player }]);
       return;
     }
-    if (c || view.finished) return;
+    if (c || view.finished || swapMode) return;
     place(view.turn, cell, selected, adhoc);
   };
 
@@ -135,11 +163,15 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   const unlisted = view.cards.slice(baseCount);
   const npcKey = setup.npcId !== undefined ? String(setup.npcId) : null;
   const rematch = buildRematch(setup, view);
-  const canPlace = !view.finished && !fixMode && (selected !== null || adhoc !== null);
+  const canPlace = !view.finished && !fixMode && !swapMode && (selected !== null || adhoc !== null);
 
   const prompt = view.finished
     ? ''
-    : myTurn
+    : swapMode
+      ? swapIn
+        ? 'スワップ: 相手に渡した自分のカードをタップしてください'
+        : 'スワップ: 相手から来たカードをタップしてください'
+      : myTurn
       ? forcedMode && forcedCard === undefined
         ? 'あなたの番です。ゲームに指定されたカードをタップしてください'
         : 'あなたの番です'
@@ -157,12 +189,22 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
         </div>
         <div className="toolbar-actions">
           <button type="button" className="btn-quiet" onClick={undo} disabled={view.applied === 0}>1 手戻す</button>
-          <button type="button" className={`btn-quiet${fixMode ? ' is-on' : ''}`} aria-pressed={fixMode} onClick={() => setFixMode(!fixMode)}>所有を修正</button>
+          {view.placed === 0 && !view.finished && (
+            <button type="button" className={`btn-quiet${swapMode ? ' is-on' : ''}`} aria-pressed={swapMode} onClick={toggleSwap}>スワップ</button>
+          )}
+          <button type="button" className={`btn-quiet${fixMode ? ' is-on' : ''}`} aria-pressed={fixMode}
+            onClick={() => { setSwapMode(false); setSwapIn(null); setFixMode(!fixMode); }}>所有を修正</button>
           <button type="button" className="btn-quiet" onClick={onNewMatch}>設定に戻る</button>
         </div>
       </div>
 
       {fixMode && <p className="note note-warn">盤面のカードをタップすると、青と赤が入れ替わります。ゲームの表示に合わせてください。</p>}
+      {swapMode && (
+        <p className="note note-warn">
+          スワップ: 相手から来たカードと、相手に渡した自分のカードを 1 枚ずつタップしてください。
+          {swapIn && `(来たカード: ${swapIn.card.label ?? swapIn.card.sides.join('/')})`}
+        </p>
+      )}
       {view.overridden && (
         <p className="note note-warn">
           ルールの想定がゲームと食い違いました。以降の「確定」「保証」は参考としてください。
@@ -175,16 +217,17 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
         <div className="table-side">
           <div className="hand-row hand-opp" aria-label="相手の手札">
             {view.oppKnown.map((i) => (
-              <CardView key={i} card={view.cards[i]} owner={1} size="sm" shift={shiftOf(i)} selected={selected === i}
-                dimmed={myTurn || view.finished}
-                onClick={!myTurn && !view.finished ? () => { setAdhoc(null); setSelected(selected === i ? null : i); } : undefined} />
+              <CardView key={i} card={view.cards[i]} owner={1} size="sm" shift={shiftOf(i)} selected={swapMode ? swapIn?.index === i : selected === i}
+                dimmed={swapMode ? false : myTurn || view.finished}
+                onClick={swapMode ? () => takeFromOpp(i) : !myTurn && !view.finished ? () => { setAdhoc(null); setSelected(selected === i ? null : i); } : undefined} />
             ))}
             {Array.from({ length: view.oppUnknown }, (_, k) => (
               <CardView key={`u${k}`} card={null} owner={1} size="sm" dimmed={view.finished}
-                onClick={view.finished ? undefined : openReveal} ariaLabel="相手の裏向きのカードを入力" />
+                onClick={view.finished ? undefined : swapMode ? () => setPicker(view.oppPool.length > 0 ? 'swap-pool' : 'swap-editor') : openReveal}
+                ariaLabel={swapMode ? '相手から来たカードを入力' : '相手の裏向きのカードを入力'} />
             ))}
           </div>
-          {!view.finished && view.oppUnknown > 0 && setup.rules.open !== 'none' && (
+          {!view.finished && !swapMode && view.oppUnknown > 0 && setup.rules.open !== 'none' && (
             <p className="note">
               {setup.rules.open === 'all' ? 'オールオープン' : 'スリーオープン'}で見えているカードは、「?」をタップして入れてください。相手の手札が全て分かると「確定」で読めます。
             </p>
@@ -204,7 +247,8 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
               return (
                 <CardView key={i} card={view.cards[i]} owner={0} shift={shiftOf(i)} selected={selected === i}
                   recommended={myTurn && recommendedMove?.move.card === i}
-                  dimmed={!myTurn || locked} onClick={myTurn && !locked ? () => setSelected(selected === i && !forcedMode ? null : i) : undefined} />
+                  dimmed={swapMode ? !swapIn : !myTurn || locked}
+                  onClick={swapMode ? (swapIn ? () => giveMyCard(i) : undefined) : myTurn && !locked ? () => setSelected(selected === i && !forcedMode ? null : i) : undefined} />
               );
             })}
           </div>
@@ -234,7 +278,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
               <button type="button" className="btn btn-primary" onClick={onNewMatch}>同じ相手ともう一戦</button>
             </section>
           )}
-          {myTurn && position && <AnalysisPanel solver={solver} cards={view.cards} onApply={apply} />}
+          {myTurn && position && !swapMode && <AnalysisPanel solver={solver} cards={view.cards} onApply={apply} />}
         </div>
       </div>
 
@@ -250,6 +294,23 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
           </div>
           <button type="button" className="btn-quiet" onClick={() => setPicker('reveal-editor')}>リストに無いカードだった</button>
         </Modal>
+      )}
+      {picker === 'swap-pool' && (
+        <Modal title="相手から来たカード" onClose={() => setPicker(null)}>
+          <p className="note">スワップで自分の手札に来たカードです。このあと、相手に渡した自分のカードをタップしてください。</p>
+          <div className="pool-row pool-pick">
+            {view.oppPool.map((i) => (
+              <div className="slot" key={i}>
+                <CardView card={view.cards[i]} owner={1} shift={shiftOf(i)} onClick={() => takeFromOpp(i)} />
+              </div>
+            ))}
+          </div>
+          <button type="button" className="btn-quiet" onClick={() => setPicker('swap-editor')}>リストに無いカードだった</button>
+        </Modal>
+      )}
+      {picker === 'swap-editor' && (
+        <CardEditor title="相手から来たカード" owner={1} typeMatters={setup.rules.typeShift !== 'none'}
+          onCommit={(card) => { setSwapIn({ ref: { from: 'adhoc', card }, card, index: -1 }); setPicker(null); }} onClose={() => setPicker(null)} />
       )}
       {picker === 'reveal-editor' && (
         <CardEditor title="相手のカード" owner={1} typeMatters={setup.rules.typeShift !== 'none'}
