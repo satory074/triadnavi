@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { draftToSetup, parseAppState, type AppState } from './core/appState';
 import { parseCollection } from './core/collection';
 import { parsePrefs } from './core/prefs';
 import { parseSaved } from './core/presets';
+import { ownedCards } from './data';
 import { CollectionScreen } from './components/CollectionScreen';
 import { HelpModal } from './components/HelpModal';
 import { PlayScreen } from './components/PlayScreen';
@@ -19,6 +20,8 @@ export default function App() {
   // 手持ちの画面は保存する状態(phase)には入れない。再読み込みしたら対戦前の画面に戻るだけでよい
   const [collecting, setCollecting] = useState(false);
   const playing = app.phase === 'play' && app.setup !== null;
+  // 手持ちの画面の見出し(所持 N / 475 枚)と同じ数え方でないと食い違うので、ownedCards を通す
+  const ownedCount = useMemo(() => ownedCards(collection).length, [collection]);
 
   const start = () => {
     const setup = draftToSetup(app.draft);
@@ -31,7 +34,9 @@ export default function App() {
         <h1>triadnavi</h1>
         <p className="tagline">トリプルトライアドの次の一手</p>
         {!playing && (
-          <button type="button" className={`btn-quiet${collecting ? ' is-on' : ''}`} onClick={() => setCollecting(!collecting)}>手持ち</button>
+          <button type="button" className={`btn${collecting ? ' is-on' : ''}`} aria-pressed={collecting} onClick={() => setCollecting(!collecting)}>
+            {ownedCount > 0 ? `手持ち ${ownedCount} 枚` : '手持ちを登録'}
+          </button>
         )}
         <button type="button" className="btn-quiet" onClick={() => setHelp(true)}>保証できること</button>
       </header>

@@ -113,6 +113,23 @@ p {
   flex: 1;
 }
 
+/* ヘッダーの「手持ち」。本文の .btn より小さく、金の枠で押せる所だと分かるようにする。
+   金のベタ塗り(.btn-primary)は「対戦を始める」に取ってあるので、ここは枠と文字だけ金にする */
+.site-head .btn {
+  padding: 0.3rem 0.7rem;
+  min-height: 2.2rem;
+  font-size: 0.85rem;
+  border-color: var(--gilt-soft);
+  color: var(--gilt);
+}
+
+/* 手持ちの画面を開いている間は反転(.btn-quiet.is-on と同じ流儀) */
+.site-head .btn.is-on {
+  background: var(--gilt);
+  border-color: var(--gilt);
+  color: #1d1705;
+}
+
 .site-foot {
   margin-top: 2.5rem;
   padding-top: 0.8rem;

@@ -7,7 +7,7 @@ import { deckSearchProgress, prepareDeckSearch, topDecks, type DeckEval, type De
 import type { SavedDeck } from '../core/presets';
 import { percent } from '../core/rank';
 import type { CardDef } from '../core/types';
-import { CARDS, cardById, npcById, resolveDeck, toDeckCard } from '../data';
+import { CARDS, npcById, ownedCards, resolveDeck, toDeckCard } from '../data';
 import { useDeckSearch, type DeckSearchRequest } from '../hooks/useDeckSearch';
 import { CardView } from './CardView';
 
@@ -58,7 +58,7 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
   const key = matchupKey(matchup);
   const blocked = matchupProblems(matchup).length > 0;
   const myDeck = draft.myCards.every((c) => c !== null) ? (draft.myCards as CardDef[]) : null;
-  const owned = useMemo(() => collection.owned.map(cardById).filter((c) => c !== undefined).map(toDeckCard), [collection]);
+  const owned = useMemo(() => ownedCards(collection).map(toDeckCard), [collection]);
   const stale = run !== null && run.matchupKey !== key;
 
   useEffect(() => {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { makeRng } from '../core/rng';
 import {
-  CARDS, CARDS_IN_LIST_ORDER, NPCS, artIdOf, cardArtUrl, cardNumber, findBySides, handProblems, normalize, npcCards, resolveCardIds, resolveDeck,
-  samplePriorCard, searchCards, searchNpcs, toCardDef, typeFromSides,
+  CARDS, CARDS_IN_LIST_ORDER, NPCS, artIdOf, cardArtUrl, cardNumber, findBySides, handProblems, normalize, npcCards, ownedCards, resolveCardIds,
+  resolveDeck, samplePriorCard, searchCards, searchNpcs, toCardDef, typeFromSides,
 } from './index';
 
 describe('同梱データの整合性', () => {
@@ -92,6 +92,13 @@ describe('入力中の手札の制限', () => {
 
   it('同梱データに無い手入力のカードは数えない', () => {
     expect(handProblems([{ sides: [1, 1, 1, 1], type: 0 }, { sides: [1, 1, 1, 1], type: 0 }, null, null, null])).toEqual([]);
+  });
+});
+
+describe('所持カード', () => {
+  // ヘッダーのボタンの枚数と、手持ちの画面の「所持 N / 475 枚」が食い違わないための不変条件
+  it('同梱データに無い ID は数えない', () => {
+    expect(ownedCards({ owned: [1, 2, 9999] }).map((c) => c.id)).toEqual([1, 2]);
   });
 });
 

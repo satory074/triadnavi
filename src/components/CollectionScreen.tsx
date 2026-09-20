@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { exportCollection, importCollection, withOwned, type Collection } from '../core/collection';
 import { CARD_TYPE_NAMES } from '../core/types';
-import { CARDS, CARDS_IN_LIST_ORDER, cardById, cardNumber, normalize, toCardDef, type CardInfo } from '../data';
+import { CARDS, CARDS_IN_LIST_ORDER, cardNumber, normalize, ownedCards, toCardDef, type CardInfo } from '../data';
 import { CardView } from './CardView';
 
 interface Props {
@@ -48,7 +48,7 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
   const [message, setMessage] = useState<string | null>(null);
 
   const ownedSet = useMemo(() => new Set(collection.owned), [collection]);
-  const known = useMemo(() => collection.owned.filter((id) => cardById(id) !== undefined), [collection]);
+  const known = useMemo(() => ownedCards(collection), [collection]);
 
   const shown = useMemo(() => {
     const q = normalize(query);

@@ -1,4 +1,4 @@
-import { deckProblems, type DeckCard, type DeckProblem } from '../core/collection';
+import { deckProblems, type Collection, type DeckCard, type DeckProblem } from '../core/collection';
 import type { Rng } from '../core/rng';
 import type { CardDef, CardType, Sides } from '../core/types';
 import cardsJson from './cards.json';
@@ -48,6 +48,14 @@ for (const c of CARDS) {
 
 export function cardById(id: number): CardInfo | undefined {
   return byId.get(id);
+}
+
+/**
+ * 所持しているカード。同梱データに無い ID は落とす(古い版に戻しても保存は消さない方針なので、絞るのは表示側)。
+ * ヘッダーの枚数と手持ちの画面の枚数を食い違わせないため、数え方はここ 1 箇所に置く。
+ */
+export function ownedCards(c: Collection): CardInfo[] {
+  return c.owned.map((id) => byId.get(id)).filter((x): x is CardInfo => x !== undefined);
 }
 
 /** 数字 4 つからの逆引き。ほとんどの組は 1 枚に決まる(同じ数字でタイプが違うのは 3 組だけ) */
