@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { chaosExactFeasible } from '../core/analyze';
-import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, type MatchEvent, type MatchSetup } from '../core/match';
+import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, type MatchEvent, type MatchSetup, type RevealRef } from '../core/match';
 import { guaranteeKind, placedCount, positionKey, type Position } from '../core/position';
 import { learnCards, type SavedData } from '../core/presets';
 import { recommended } from '../core/rank';
@@ -32,7 +32,8 @@ interface Props {
 export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRematch, onNewMatch, onSaved }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const [adhoc, setAdhoc] = useState<CardDef | null>(null);
-  const [picker, setPicker] = useState<'pool' | 'editor' | null>(null);
+  // reveal = 相手の裏向きの手札を開く、mismatch = 入力した手札と違うカードが出た
+  const [picker, setPicker] = useState<'reveal-pool' | 'reveal-editor' | 'mismatch' | null>(null);
   const [fixMode, setFixMode] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -77,11 +78,30 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   };
 
   const place = (by: Player, cell: number, cardIndex: number | null, adhocCard: CardDef | null) => {
-    const ref = adhocCard ? ({ from: 'adhoc', card: adhocCard } as const) : cardIndex !== null ? cardRefOf(setup, cardIndex) : null;
+    const ref = adhocCard ? ({ from: 'adhoc', card: adhocCard } as const) : cardIndex !== null ? cardRefOf(setup, cardIndex, view.revealed) : null;
     if (!ref) return;
     onEvents([...events.slice(0, view.applied), { t: 'place', by, card: ref, cell }]);
     reset();
   };
+
+  /**
+   * 相手の裏向きの手札を 1 枚開く。cardIndex は開いた後の cards への添字
+   * (候補から開くならその添字、手入力なら末尾に足される)。
+   * 相手の番なら「今出したカード」であることが多いので、そのまま選んでマス待ちにする。
+   */
+  const reveal = (ref: RevealRef, cardIndex: number) => {
+    onEvents([...events.slice(0, view.applied), { t: 'reveal', card: ref }]);
+    setAdhoc(null);
+    setPicker(null);
+    if (!myTurn) setSelected(cardIndex);
+  };
+
+  const revealFromPool = (cardIndex: number) => {
+    const ref = cardRefOf(setup, cardIndex, view.revealed);
+    if (ref?.from === 'pool') reveal(ref, cardIndex);
+  };
+
+  const openReveal = () => setPicker(view.oppPool.length > 0 ? 'reveal-pool' : 'reveal-editor');
 
   const onCell = (cell: number) => {
     const c = view.state.board[cell];
@@ -156,16 +176,22 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
           <div className="hand-row hand-opp" aria-label="相手の手札">
             {view.oppKnown.map((i) => (
               <CardView key={i} card={view.cards[i]} owner={1} size="sm" shift={shiftOf(i)} selected={selected === i}
-                dimmed={myTurn || view.finished} onClick={!myTurn && !view.finished ? () => { setAdhoc(null); setSelected(i); } : undefined} />
+                dimmed={myTurn || view.finished}
+                onClick={!myTurn && !view.finished ? () => { setAdhoc(null); setSelected(selected === i ? null : i); } : undefined} />
             ))}
             {Array.from({ length: view.oppUnknown }, (_, k) => (
-              <CardView key={`u${k}`} card={null} owner={1} size="sm" dimmed={myTurn || view.finished}
-                onClick={!myTurn && !view.finished ? () => setPicker(view.oppPool.length > 0 ? 'pool' : 'editor') : undefined} ariaLabel="裏向きのカードが出た" />
+              <CardView key={`u${k}`} card={null} owner={1} size="sm" dimmed={view.finished}
+                onClick={view.finished ? undefined : openReveal} ariaLabel="相手の裏向きのカードを入力" />
             ))}
           </div>
+          {!view.finished && view.oppUnknown > 0 && setup.rules.open !== 'none' && (
+            <p className="note">
+              {setup.rules.open === 'all' ? 'オールオープン' : 'スリーオープン'}で見えているカードは、「?」をタップして入れてください。相手の手札が全て分かると「確定」で読めます。
+            </p>
+          )}
           {!myTurn && !view.finished && view.oppUnknown === 0 && (
             <p className="hand-extra">
-              <button type="button" className="btn-quiet" onClick={() => setPicker('editor')}>入力と違うカードが出た</button>
+              <button type="button" className="btn-quiet" onClick={() => setPicker('mismatch')}>入力と違うカードが出た</button>
             </p>
           )}
           {adhoc && <p className="note">出たカード: {adhoc.label ?? adhoc.sides.join('/')}。置かれたマスをタップしてください。</p>}
@@ -212,19 +238,24 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
         </div>
       </div>
 
-      {picker === 'pool' && (
-        <Modal title="相手が出したカード" onClose={() => setPicker(null)}>
+      {picker === 'reveal-pool' && (
+        <Modal title="相手のカード" onClose={() => setPicker(null)}>
+          <p className="note">相手の手札に入れます。相手が今このカードを出したなら、続けて置かれたマスをタップしてください。</p>
           <div className="pool-row pool-pick">
             {view.oppPool.map((i) => (
               <div className="slot" key={i}>
-                <CardView card={view.cards[i]} owner={1} shift={shiftOf(i)} onClick={() => { setAdhoc(null); setSelected(i); setPicker(null); }} />
+                <CardView card={view.cards[i]} owner={1} shift={shiftOf(i)} onClick={() => revealFromPool(i)} />
               </div>
             ))}
           </div>
-          <button type="button" className="btn-quiet" onClick={() => setPicker('editor')}>リストに無いカードが出た</button>
+          <button type="button" className="btn-quiet" onClick={() => setPicker('reveal-editor')}>リストに無いカードだった</button>
         </Modal>
       )}
-      {picker === 'editor' && (
+      {picker === 'reveal-editor' && (
+        <CardEditor title="相手のカード" owner={1} typeMatters={setup.rules.typeShift !== 'none'}
+          onCommit={(card) => reveal({ from: 'adhoc', card }, view.cards.length)} onClose={() => setPicker(null)} />
+      )}
+      {picker === 'mismatch' && (
         <CardEditor title="相手が出したカード" owner={1} typeMatters={setup.rules.typeShift !== 'none'}
           onCommit={(card) => { setSelected(null); setAdhoc(card); setPicker(null); }} onClose={() => setPicker(null)} />
       )}

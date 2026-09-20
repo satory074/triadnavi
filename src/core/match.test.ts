@@ -113,6 +113,48 @@ describe('非公開手札', () => {
     expect(replay(s, [{ t: 'place', by: 1, card: { from: 'pool', index: 0 }, cell: 0 }]).applied).toBe(0);
   });
 
+  it('見えている相手のカードを、出される前に開ける(オールオープン等)', () => {
+    const s = hidden();
+    const v = replay(s, [{ t: 'reveal', card: { from: 'pool', index: 0 } }]);
+    expect(v.applied).toBe(1);
+    expect(v.oppUnknown).toBe(2);
+    expect(v.oppPool.length).toBe(3);
+    expect(v.oppKnown.length).toBe(3);
+    expect(v.outOfPool).toBe(false);
+    // 3 枚とも開けば「確定」で読める
+    const evs: MatchEvent[] = [0, 1, 2].map((index) => ({ t: 'reveal', card: { from: 'pool', index } }));
+    const all = replay(s, evs);
+    expect(all.oppUnknown).toBe(0);
+    expect(guaranteeKind(toPosition(s, all))).toBe('exact');
+  });
+
+  it('開いたカードは、そのまま相手の手として出せる', () => {
+    const s = hidden();
+    const v = replay(s, [
+      { t: 'reveal', card: { from: 'pool', index: 0 } },
+      { t: 'place', by: 1, card: { from: 'revealed', index: 0 }, cell: 0 },
+    ]);
+    expect(v.applied).toBe(2);
+    expect(v.cards[v.state.board[0]!.card]).toEqual(s.oppPool[0]);
+    expect(v.oppKnown.length).toBe(2);
+    expect(v.oppUnknown).toBe(2);
+    expect(v.turn).toBe(0);
+  });
+
+  it('候補リストに無いカードが見えたら、保証が無効だったことを記録する', () => {
+    const v = replay(hidden(), [{ t: 'reveal', card: { from: 'adhoc', card: c(9, 9, 9, 9) } }]);
+    expect(v.applied).toBe(1);
+    expect(v.oppUnknown).toBe(2);
+    expect(v.outOfPool).toBe(true);
+    expect(v.cards[v.revealed[0]].sides).toEqual([9, 9, 9, 9]);
+  });
+
+  it('不明スロットが無い、または同じ候補を 2 回開くイベントは捨てる', () => {
+    expect(replay(baseSetup({ oppPool: [c(8, 8, 8, 8)] }), [{ t: 'reveal', card: { from: 'pool', index: 0 } }]).applied).toBe(0);
+    const twice: MatchEvent[] = [{ t: 'reveal', card: { from: 'pool', index: 0 } }, { t: 'reveal', card: { from: 'pool', index: 0 } }];
+    expect(replay(hidden(), twice).applied).toBe(1);
+  });
+
   it('cards への添字と CardRef を相互に変換できる', () => {
     const s = hidden();
     expect(cardRefOf(s, 0)).toEqual({ from: 'my', index: 0 });
@@ -121,6 +163,9 @@ describe('非公開手札', () => {
     expect(cardRefOf(s, 7)).toEqual({ from: 'pool', index: 0 });
     expect(cardRefOf(s, 10)).toEqual({ from: 'pool', index: 3 });
     expect(cardRefOf(s, 11)).toBeNull();
+    // 開いたカードは、候補リストの添字と重なるので revealed が優先される
+    const v = replay(s, [{ t: 'reveal', card: { from: 'pool', index: 1 } }]);
+    expect(cardRefOf(s, v.revealed[0], v.revealed)).toEqual({ from: 'revealed', index: 0 });
   });
 });
 
@@ -131,6 +176,19 @@ describe('オーダーとカオス', () => {
     const v = replay(s, [{ t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 0 }, { t: 'place', by: 1, card: { from: 'opp', index: 3 }, cell: 1 }]);
     expect(orderForcedCard(s, v)).toBe(1);
     expect(needsForcedCard(s)).toBe(false);
+  });
+
+  it('対局中にカードを開いたら、相手の並び順の前提は使わない', () => {
+    const s = baseSetup({
+      rules: { ...NO_RULES, pick: 'order' },
+      oppSlots: [c(1, 2, 1, 1), c(3, 3, 4, 5), c(2, 9, 2, 2), c(6, 6, 6, 6), null],
+      oppPool: [c(7, 7, 7, 7)],
+      oppOrderKnown: true,
+    });
+    expect(toPosition(s, replay(s, [])).oppOrderKnown).toBe(true);
+    const v = replay(s, [{ t: 'reveal', card: { from: 'pool', index: 0 } }]);
+    expect(v.oppUnknown).toBe(0);
+    expect(toPosition(s, v).oppOrderKnown).toBe(false);
   });
 
   it('カオス、およびサドンデス再戦中のオーダーでは、強制カードをユーザーに教えてもらう', () => {
