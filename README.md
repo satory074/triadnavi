@@ -42,5 +42,8 @@ main への push で GitHub Actions が GitHub Pages に自動デプロイしま
 
 ## データと権利表記
 
-カードと NPC のデータは [FFXIV Collect](https://ffxivcollect.com/) と [XIVAPI](https://v2.xivapi.com/) から取得しています。ゲームの画像は使っていません。
+カードと NPC のデータは [FFXIV Collect](https://ffxivcollect.com/) と [XIVAPI](https://v2.xivapi.com/) から取得しています。
+
+カードの絵はゲーム内の画像です。カード 1 枚ごとの絵は公式には配布されていない(Lodestone のエオルゼアデータベースは全カード共通のアイコン、ファンキットには収録なし)ため、有志のサービス XIVAPI が配信しているものを、表示のたびにブラウザから直接読み込んでいます。このリポジトリにも公開サイトにも、ゲームの画像は含めていません。画面下の「カードの絵を表示」を外すと XIVAPI への通信は行わず、数字だけの表示になります。
+
 非公式のファンツールです。FINAL FANTASY XIV © SQUARE ENIX

@@ -30,6 +30,7 @@ export function CardEditor({ title, owner, typeMatters, onCommit, onClose }: Pro
       const candidates = findBySides(sides);
       const types = new Set(candidates.map((c) => c.type));
       if (candidates.length === 1 || (candidates.length > 1 && (types.size === 1 || !typeMatters))) {
+        // 名前を連結するのは、どのカードか決まらない印。artIdOf はこの形では絵を出さない(片方の名前だけにしないこと)
         onCommit({ sides, type: candidates[0].type, label: candidates.map((c) => c.name).join(' / ') });
         setDigits([]);
       } else if (candidates.length === 0 && !typeMatters) {

@@ -98,6 +98,27 @@ export function resolveDeck(cards: readonly CardDef[]): CardInfo[] | null {
   return out;
 }
 
+/**
+ * カードの絵に使う ID。数字で 1 枚に決まるか、名前が一致する時だけ返す(違う絵を出すくらいなら出さない)。
+ * 数字が同じカードは 9 組ある(タイプも同じ 6 組と、タイプだけが違う 3 組)。タイプでは絞らない:
+ * タイプが結果に効かない時、CardEditor は先頭の候補のタイプで確定するので、タイプが違うだけの 3 組を取り違える。
+ */
+export function artIdOf(card: CardDef): number | undefined {
+  const hits = findBySides(card.sides);
+  if (hits.length === 1) return hits[0].id;
+  return hits.find((c) => c.name === card.label)?.id;
+}
+
+/**
+ * カードの絵(金の枠と絵柄。内側と四隅は透明)の URL。アイコン番号は 87000 + ID で、hr は 2 倍の解像度。
+ * 同梱せず、XIVAPI を実行時に参照する。JPEG は透過が黒く潰れるので使わない。
+ */
+export function cardArtUrl(id: number, hr = false): string {
+  const icon = 87000 + id;
+  const folder = String(Math.floor(icon / 1000) * 1000).padStart(6, '0');
+  return `https://v2.xivapi.com/api/asset?path=ui/icon/${folder}/${String(icon).padStart(6, '0')}${hr ? '_hr1' : ''}.tex&format=webp`;
+}
+
 /** ひらがな → カタカナ、英字は小文字、空白と中黒を除去 */
 export function normalize(s: string): string {
   return s

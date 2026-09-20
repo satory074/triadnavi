@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { makeRng } from '../core/rng';
 import {
-  CARDS, CARDS_IN_LIST_ORDER, NPCS, cardNumber, findBySides, handProblems, normalize, npcCards, resolveCardIds, resolveDeck, samplePriorCard, searchCards,
-  searchNpcs, toCardDef, typeFromSides,
+  CARDS, CARDS_IN_LIST_ORDER, NPCS, artIdOf, cardArtUrl, cardNumber, findBySides, handProblems, normalize, npcCards, resolveCardIds, resolveDeck,
+  samplePriorCard, searchCards, searchNpcs, toCardDef, typeFromSides,
 } from './index';
 
 describe('同梱データの整合性', () => {
@@ -141,5 +141,46 @@ describe('事前分布', () => {
     };
     expect(mean(1)).toBeLessThan(mean(2));
     expect(mean(2)).toBeLessThan(mean(3));
+  });
+});
+
+describe('カードの絵', () => {
+  // 数字が同じカードの組。同梱データから数える(カードが増えても追従する)
+  const groups = [...new Set(CARDS.map((c) => c.sides.join(',')))]
+    .map((k) => CARDS.filter((c) => c.sides.join(',') === k))
+    .filter((g) => g.length > 1);
+
+  it('どのカードも、自分の絵に決まる', () => {
+    for (const c of CARDS) expect(artIdOf(toCardDef(c))).toBe(c.id);
+  });
+
+  it('数字が同じカードは、名前が一致した時だけ絵を出す', () => {
+    expect(groups.length).toBeGreaterThanOrEqual(9);
+    for (const g of groups) {
+      const { sides, type } = g[0];
+      // 数字を打って確定した時の形(CardEditor は名前を連結する)
+      expect(artIdOf({ sides, type, label: g.map((c) => c.name).join(' / ') })).toBeUndefined();
+      expect(artIdOf({ sides, type })).toBeUndefined();
+      for (const c of g) expect(artIdOf(toCardDef(c))).toBe(c.id);
+    }
+  });
+
+  it('タイプだけが違う組でも、タイプで 1 枚に絞らない', () => {
+    // タイプが結果に効かない時、CardEditor は先頭の候補のタイプで確定する。タイプで絞ると先頭のカードの絵に決まってしまう
+    const hits = findBySides([9, 5, 7, 6]);
+    expect(hits.length).toBe(2);
+    expect(new Set(hits.map((c) => c.type)).size).toBe(2);
+    for (const c of hits) expect(artIdOf({ sides: c.sides, type: c.type })).toBeUndefined();
+  });
+
+  it('同梱データに無い数字には絵が無い', () => {
+    expect(findBySides([1, 1, 1, 1])).toEqual([]);
+    expect(artIdOf({ sides: [1, 1, 1, 1], type: 0 })).toBeUndefined();
+  });
+
+  it('アイコン番号は 87000 + ID を 6 桁にそろえる', () => {
+    expect(cardArtUrl(1)).toBe('https://v2.xivapi.com/api/asset?path=ui/icon/087000/087001.tex&format=webp');
+    expect(cardArtUrl(475)).toContain('/087000/087475.tex');
+    expect(cardArtUrl(1, true)).toContain('/087000/087001_hr1.tex');
   });
 });

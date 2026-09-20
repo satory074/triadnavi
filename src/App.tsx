@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { draftToSetup, parseAppState, type AppState } from './core/appState';
 import { parseCollection } from './core/collection';
+import { parsePrefs } from './core/prefs';
 import { parseSaved } from './core/presets';
 import { CollectionScreen } from './components/CollectionScreen';
 import { HelpModal } from './components/HelpModal';
 import { PlayScreen } from './components/PlayScreen';
 import { SetupScreen } from './components/SetupScreen';
+import { CardArtContext } from './hooks/useCardArt';
 import { usePersisted } from './hooks/usePersisted';
 
 export default function App() {
   const [app, setApp] = usePersisted<AppState>('triadnavi:state:v1', parseAppState);
   const [saved, setSaved] = usePersisted('triadnavi:saved:v1', parseSaved);
   const [collection, setCollection] = usePersisted('triadnavi:collection:v1', parseCollection);
+  const [prefs, setPrefs] = usePersisted('triadnavi:prefs:v1', parsePrefs);
   const [help, setHelp] = useState(false);
   // 手持ちの画面は保存する状態(phase)には入れない。再読み込みしたら対戦前の画面に戻るだけでよい
   const [collecting, setCollecting] = useState(false);
@@ -23,7 +26,7 @@ export default function App() {
   };
 
   return (
-    <>
+    <CardArtContext value={prefs.cardArt}>
       <header className="site-head">
         <h1>triadnavi</h1>
         <p className="tagline">トリプルトライアドの次の一手</p>
@@ -59,12 +62,17 @@ export default function App() {
       )}
 
       <footer className="site-foot">
-        <p>非公式のファンツールです。ゲームの画像は使っていません。</p>
+        <label className="check">
+          <input type="checkbox" checked={prefs.cardArt} onChange={(e) => setPrefs({ ...prefs, cardArt: e.target.checked })} />
+          カードの絵を表示
+        </label>
+        <p>非公式のファンツールです。</p>
         <p>カードと NPC のデータ: FFXIV Collect、XIVAPI</p>
+        <p>カードの絵はゲーム内の画像です。このサイトには置かず、有志のサービス XIVAPI から表示のたびに読み込んでいます(「カードの絵を表示」を外すと読み込みません)。</p>
         <p>FINAL FANTASY XIV © SQUARE ENIX</p>
       </footer>
 
       {help && <HelpModal onClose={() => setHelp(false)} />}
-    </>
+    </CardArtContext>
   );
 }

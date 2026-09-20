@@ -125,6 +125,11 @@ p {
   margin: 0.1rem 0;
 }
 
+.site-foot .check {
+  margin: 0 0 0.4rem;
+  font-size: inherit;
+}
+
 /* ---- ボタン類 ---- */
 .btn {
   border: 1px solid var(--mat-line);
@@ -598,6 +603,11 @@ input:not([type]) {
   opacity: 0.45;
 }
 
+/* 絵が背景を覆っても未所持が一目で分かるよう、色を抜く */
+.coll-cell:not(.is-owned) .card-art {
+  filter: grayscale(1);
+}
+
 .coll-cell.is-owned .pool-name {
   color: var(--paper);
 }
@@ -702,6 +712,18 @@ textarea {
   border: 1px dashed var(--blue);
 }
 
+/* カードの絵。数字より前の要素なので z-index なしで下に入る。内側は透明で、下の青/赤が持ち主を示す。
+   画像は 104:128、カードは 4:5。1.5% の差は引き伸ばして枠を四辺に合わせる */
+.card-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+}
+
 .card-unknown {
   position: absolute;
   inset: 0;
@@ -729,6 +751,30 @@ textarea {
 .card-sm .card-sides {
   inset: 8%;
   font-size: 30cqw;
+}
+
+/* 絵の上でも数字を読めるように、数字ごとに暗い円を敷く(中央は空けて絵柄を隠さない)。絵が無い時は今まで通り */
+.has-art .card-sides {
+  text-shadow: 0 0 0.15em #000, 0 0 0.15em #000, 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
+}
+
+/* 円は擬似要素で敷く。数字の箱そのものを広げると、グリッドの列が押し広げられて右の数字が切れる */
+.has-art .side {
+  position: relative;
+  z-index: 0;
+}
+
+.has-art .side::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 50%;
+  width: 1.3em;
+  height: 1.3em;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.6) 55%, transparent);
 }
 
 .side-0 { grid-area: 1 / 2; }
@@ -769,6 +815,20 @@ textarea {
   padding: 0 0.25em;
   border-radius: 0.3em;
   background: rgba(0, 0, 0, 0.45);
+}
+
+.has-art .card-type {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+/* 名前は枠の下辺に重なるので帯を敷く。box-sizing が border-box なので max-height は余白込み(2 行 2.3em + 0.7em) */
+.has-art .card-name {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.4em 4% 0.3em;
+  max-height: 3em;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.75) 65%, transparent);
 }
 
 /* なぜ裏返ったかの表示。数字と重ならないよう、カード下端の帯にする(この時は名前を出さない) */
