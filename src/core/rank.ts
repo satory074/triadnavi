@@ -118,3 +118,35 @@ export function secondaryText(m: MoveEval, a: Analysis): string {
   }
   return '';
 }
+
+/** 種別の短い説明。バッジの横に添えて、ヘルプを開かなくても意味が分かるようにする */
+export const KIND_GLOSS: Record<GuaranteeKind, string> = {
+  exact: '双方の手札が全て見えています',
+  pool: '候補のどの手札でも成り立つ結果です',
+  estimate: '想定した手札で試算した目安です',
+  chaos: '引く順を想定して試算した目安です',
+};
+
+/**
+ * おすすめの手で何が起きるかの平易な一文(結論)。数字の根拠は secondaryText に任せる。
+ * 保証できない種別(推定・カオス)では、保証の言葉を使わない
+ */
+export function outcomeText(m: MoveEval, a: Analysis): string {
+  if (a.kind === 'estimate') return '勝ちやすさで選んだ手です。相手の手札が不明なので、結果は保証できません';
+  if (a.kind === 'chaos') return '引かされるカードを想定して、勝ちやすさで選んだ手です';
+  if (m.cls === undefined) return '計算中';
+  if (a.kind === 'pool') {
+    return {
+      win: 'この手なら、候補のどの手札でも勝ちが確定します',
+      draw: 'この手なら、候補のどの手札でも引き分け以上です',
+      notWin: 'この手では勝ちを保証できません。引き分け以上かは計算中です',
+      loss: '最悪の手札に対する保証はありません。勝ちやすさで選んだ手です',
+    }[m.cls];
+  }
+  return {
+    win: 'この手なら勝ちが確定します',
+    draw: 'この手なら引き分け以上です。相手のミスを待ちます',
+    notWin: 'この手では勝ちを確定できません。引き分け以上かは計算中です',
+    loss: '相手が最善なら負けです。相手のミスを最大限狙う手です',
+  }[m.cls];
+}

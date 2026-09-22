@@ -18,12 +18,14 @@ interface Props {
   partial?: number[];
   showName?: boolean;
   badge?: string;
+  /** 左上に「自」「相」の印を出す(盤面の札。持ち主が色相だけにならないように) */
+  ownerMark?: boolean;
   onClick?: () => void;
   ariaLabel?: string;
 }
 
 /** 数字をゲームと同じひし形(上・左右・下)に並べたカード。設定が入っていて絵が決まるカードには、数字の下に絵を敷く */
-export function CardView({ card, empty, owner, size = 'md', selected, recommended, dimmed, shift = 0, partial, showName = true, badge, onClick, ariaLabel }: Props) {
+export function CardView({ card, empty, owner, size = 'md', selected, recommended, dimmed, shift = 0, partial, showName = true, badge, ownerMark, onClick, ariaLabel }: Props) {
   const artOn = useCardArt();
   // 読み込みに失敗した絵。同じ CardView が後で別のカードを映す(スロットの入れ替え、再戦)ので、真偽値ではなく ID で覚える
   const [failedArt, setFailedArt] = useState<number | null>(null);
@@ -81,6 +83,7 @@ export function CardView({ card, empty, owner, size = 'md', selected, recommende
         </span>
       )}
       {card && card.type !== 0 && <span className="card-type">{CARD_TYPE_NAMES[card.type]}</span>}
+      {ownerMark && (owner === 0 || owner === 1) && <span className="card-owner" aria-hidden="true">{owner === 0 ? '自' : '相'}</span>}
       {badge && <span className="card-badge">{badge}</span>}
       {showName && !badge && size !== 'sm' && card?.label && <span className="card-name">{card.label}</span>}
     </>

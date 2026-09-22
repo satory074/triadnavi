@@ -19,12 +19,15 @@ export function Board({ view, shiftOf, recommendedCell, canPlace, onCell }: Prop
       {view.state.board.map((c, cell) => {
         if (!c) {
           return (
+            // disabled にするとタブ順から消え、名前も読まれない。置けない時は aria-disabled にして、押しても何もしない
             <button
               type="button"
               key={cell}
               className={`cell cell-empty${recommendedCell === cell ? ' is-recommended' : ''}${canPlace ? ' cell-open' : ''}`}
-              disabled={!canPlace}
-              onClick={() => onCell(cell)}
+              aria-disabled={canPlace ? undefined : true}
+              onClick={() => {
+                if (canPlace) onCell(cell);
+              }}
               aria-label={`${CELL_NAMES[cell]}に置く`}
             />
           );
@@ -38,6 +41,7 @@ export function Board({ view, shiftOf, recommendedCell, canPlace, onCell }: Prop
               owner={c.owner}
               shift={shiftOf(c.card)}
               badge={badge || undefined}
+              ownerMark
               ariaLabel={`${CELL_NAMES[cell]}: ${c.owner === 0 ? '自分' : '相手'}のカード`}
             />
           </div>

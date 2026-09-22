@@ -13,10 +13,11 @@ import type { CardDef, Player } from '../core/types';
 import { makeChaosWorlds, makeWorlds, type World } from '../core/worlds';
 import { samplePriorCard, type PriorLevel } from '../data';
 import { useSolver } from '../hooks/useSolver';
-import { AnalysisPanel } from './AnalysisPanel';
+import { BestMove, MoveTable } from './AnalysisPanel';
 import { Board } from './Board';
 import { CardEditor } from './CardEditor';
 import { CardView } from './CardView';
+import { ConfirmAction } from './ConfirmAction';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { RuleChips } from './RuleChips';
@@ -206,66 +207,71 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   const rematch = buildRematch(setup, view);
   const canPlace = !view.finished && !swapMode && (selected !== null || adhoc !== null);
 
-  const prompt = view.finished
-    ? ''
+  // 手番の案内は、タップする手札の隣に出す(相手の手札の下 / 自分の手札の上)。両方の枠を常に描いて、出たり消えたりで盤面が動かないようにする
+  const oppBanner = view.finished || myTurn
+    ? swapMode && !swapIn ? 'スワップ: 相手から来たカードをタップしてください' : ''
     : swapMode
-      ? swapIn
-        ? 'スワップ: 相手に渡した自分のカードをタップしてください'
-        : 'スワップ: 相手から来たカードをタップしてください'
-      : myTurn
-      ? forcedMode && forcedCard === undefined
-        ? 'あなたの番です。ゲームに指定されたカードをタップしてください'
-        : 'あなたの番です'
+      ? swapIn ? '' : 'スワップ: 相手から来たカードをタップしてください'
       : selected !== null || adhoc
         ? '相手が置いたマスをタップしてください'
         : '相手の番です。相手が出したカードをタップしてください';
+  const myBanner = view.finished
+    ? ''
+    : swapMode
+      ? swapIn ? `スワップ: 来たカードは ${swapIn.card.label ?? swapIn.card.sides.join('/')}。相手に渡した自分のカードをタップしてください` : ''
+      : !myTurn
+        ? ''
+        : forcedMode && forcedCard === undefined
+          ? 'あなたの番です。ゲームに指定されたカードをタップしてください'
+          : selected !== null && !forcedMode
+            ? '置いたマスをタップしてください'
+            : 'あなたの番です';
+  const inProgress = events.length > 0 && !view.finished;
 
   return (
     <main className="play">
-      <div className="toolbar">
-        <div className="rule-summary">
+      {/* 1 行目: ルールと画面の移動。「設定に戻る」は記録を閉じるので、対局中は 2 段階の確認にする */}
+      <div className="match-bar">
+        <div className="match-rules">
           {setup.round > 0 && <span className="chip chip-on">サドンデス 再戦 {setup.round} 回目</span>}
-          {ruleIds.map((id) => <span className="chip chip-static" key={id}>{RULE_NAMES[id]}</span>)}
-          {ruleIds.length === 0 && <span className="muted">追加ルールなし</span>}
-          <button type="button" className="tool-btn tool-btn-sm" onClick={() => setRulesOpen(true)}>
+          <span className="match-rules-text">{ruleIds.length > 0 ? ruleIds.map((id) => RULE_NAMES[id]).join('・') : '追加ルールなし'}</span>
+          <button type="button" className="btn-tertiary btn-sm" onClick={() => setRulesOpen(true)}>
             <Icon name="rules" />ルールを変更
           </button>
         </div>
-        <div className="toolbar-actions">
-          <button type="button" className="tool-btn" onClick={undo} disabled={view.applied === 0}>
-            <Icon name="undo" />1 手戻す
-          </button>
-          <button type="button" className="tool-btn" onClick={restart} disabled={events.length === 0 && setup.round === 0}>
-            <Icon name="restart" />はじめから
-          </button>
-          {view.placed === 0 && !view.finished && (
-            <button type="button" className={`tool-btn${swapMode ? ' is-on' : ''}`} aria-pressed={swapMode} onClick={toggleSwap}>
-              <Icon name="swap" />スワップ
+        <div className="match-nav">
+          {inProgress ? (
+            <ConfirmAction className="btn-tertiary btn-sm" label={<><Icon name="back" />設定に戻る</>} confirmLabel="対局を閉じて戻る" onConfirm={onNewMatch} />
+          ) : (
+            <button type="button" className="btn-tertiary btn-sm" onClick={onNewMatch}>
+              <Icon name="back" />設定に戻る
             </button>
           )}
-          <button type="button" className="tool-btn tool-btn-nav" onClick={onNewMatch}>
-            <Icon name="back" />設定に戻る
-          </button>
         </div>
       </div>
-
-      {view.placed === 0 && !view.finished && (
-        <div className="first-pick">
-          <span className="first-pick-label">先攻</span>
-          <div className="segmented" role="group" aria-label="先攻">
-            <button type="button" className={setup.first === 0 ? 'seg-on seg-blue' : ''} aria-pressed={setup.first === 0} onClick={() => chooseFirst(0)}>自分</button>
-            <button type="button" className={setup.first === 1 ? 'seg-on seg-red' : ''} aria-pressed={setup.first === 1} onClick={() => chooseFirst(1)}>相手</button>
+      {/* 2 行目: 対局の操作。先攻は 1 枚目を置くまでだけ出る */}
+      <div className="toolbar-actions">
+        {view.placed === 0 && !view.finished && (
+          <div className="first-pick" title="1 枚目を置くまで変えられます">
+            <span className="first-pick-label">先攻</span>
+            <div className="segmented" role="group" aria-label="先攻(1 枚目を置くまで変えられます)">
+              <button type="button" className={setup.first === 0 ? 'seg-on seg-blue' : ''} aria-pressed={setup.first === 0} onClick={() => chooseFirst(0)}>自分</button>
+              <button type="button" className={setup.first === 1 ? 'seg-on seg-red' : ''} aria-pressed={setup.first === 1} onClick={() => chooseFirst(1)}>相手</button>
+            </div>
           </div>
-          <span className="muted">1 枚目を置くまで変えられます</span>
-        </div>
-      )}
-
-      {swapMode && (
-        <p className="note note-warn">
-          スワップ: 相手から来たカードと、相手に渡した自分のカードを 1 枚ずつタップしてください。
-          {swapIn && `(来たカード: ${swapIn.card.label ?? swapIn.card.sides.join('/')})`}
-        </p>
-      )}
+        )}
+        <button type="button" className="tool-btn" onClick={undo} disabled={view.applied === 0}>
+          <Icon name="undo" />1 手戻す
+        </button>
+        <button type="button" className="tool-btn" onClick={restart} disabled={events.length === 0 && setup.round === 0}>
+          <Icon name="restart" />はじめから
+        </button>
+        {view.placed === 0 && !view.finished && (
+          <button type="button" className={`tool-btn${swapMode ? ' is-on' : ''}`} aria-pressed={swapMode} onClick={toggleSwap}>
+            <Icon name="swap" />スワップ
+          </button>
+        )}
+      </div>
       {view.overridden && (
         <p className="note note-warn">
           ルールの想定がゲームと食い違いました。以降の「確定」「保証」は参考としてください。
@@ -299,9 +305,11 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
             </p>
           )}
           {adhoc && <p className="note">出たカード: {adhoc.label ?? adhoc.sides.join('/')}。置かれたマスをタップしてください。</p>}
+          <p className={`turn-banner${oppBanner ? ' turn-1' : ''}`} role="status">{oppBanner}</p>
 
           <Board view={view} shiftOf={shiftOf} recommendedCell={recommendedMove && myTurn ? recommendedMove.move.cell : null} canPlace={canPlace} onCell={onCell} />
 
+          <p className={`turn-banner${myBanner ? ' turn-0' : ''}`} role="status">{myBanner}</p>
           <div className="hand-row hand-my" aria-label="自分の手札">
             {view.myHand.map((i) => {
               const locked = orderCard !== null && orderCard !== i;
@@ -313,8 +321,10 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
               );
             })}
           </div>
-          <p className="prompt">{prompt}</p>
         </div>
+
+        {/* おすすめの帯。スマホでは自分の手札の直下、PC では右列の上に来る(grid-area) */}
+        {myTurn && position && !swapMode && <BestMove solver={solver} cards={view.cards} onApply={apply} />}
 
         <div className="table-main">
           {view.finished && view.score && (
@@ -339,7 +349,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
               <button type="button" className="btn btn-primary" onClick={onNewMatch}>同じ相手ともう一戦</button>
             </section>
           )}
-          {myTurn && position && !swapMode && <AnalysisPanel solver={solver} cards={view.cards} onApply={apply} />}
+          {myTurn && position && !swapMode && <MoveTable solver={solver} cards={view.cards} />}
         </div>
       </div>
 

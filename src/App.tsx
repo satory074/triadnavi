@@ -38,7 +38,10 @@ export default function App() {
 
   const start = () => {
     const setup = draftToSetup(app.draft);
-    if (setup) setApp({ ...app, phase: 'play', setup, events: [] });
+    if (!setup) return;
+    setApp({ ...app, phase: 'play', setup, events: [] });
+    // 設定画面の途中までスクロールした位置のまま対局画面が出ないように
+    window.scrollTo(0, 0);
   };
 
   return (
@@ -63,7 +66,10 @@ export default function App() {
           priorLevel={app.draft.priorLevel}
           saved={saved}
           onEvents={(events) => setApp((s) => ({ ...s, events }))}
-          onRematch={(setup) => setApp((s) => ({ ...s, setup, events: [] }))}
+          onRematch={(setup) => {
+            setApp((s) => ({ ...s, setup, events: [] }));
+            window.scrollTo(0, 0);
+          }}
           onNewMatch={toSetup}
           // 下書きにも書いておくと、「はじめから」の後も直前に選んだ先攻のまま始まる
           onFirst={(first) => setApp((s) => ({ ...s, draft: { ...s.draft, first }, setup: s.setup && { ...s.setup, first } }))}

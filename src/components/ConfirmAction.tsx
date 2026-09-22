@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 interface Props {
-  /** 1 回目に見せる文言 */
-  label: string;
+  /** 1 回目に見せる文言(アイコン付きでもよい) */
+  label: ReactNode;
   /** 2 回目(本当に実行する)ボタンの文言 */
   confirmLabel: string;
   onConfirm: () => void;
@@ -50,7 +50,7 @@ export function ConfirmAction({ label, confirmLabel, onConfirm, className = 'btn
     );
   }
   return (
-    <span className="confirm-action" role="group" aria-label={ariaLabel ?? label}>
+    <span className="confirm-action" role="group" aria-label={ariaLabel ?? confirmLabel}>
       <button
         ref={confirmRef}
         type="button"
