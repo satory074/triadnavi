@@ -3,13 +3,15 @@ import { matchupFromDraft, type SetupDraft } from '../core/appState';
 import type { Collection, DeckCard } from '../core/collection';
 import { matchupKey, matchupProblems, type DeckContext, type DeckEvalKind } from '../core/deckEval';
 import { DECK_KIND_LABEL, deckKindNote, deckLines, matchupCautions, scenarioSummary, stopReasonText, variantRows } from '../core/deckRank';
-import { deckSearchProgress, prepareDeckSearch, topDecks, type DeckEval, type DeckSearch, type SearchPhase } from '../core/deckSearch';
+import { deckScore, deckSearchProgress, prepareDeckSearch, topDecks, type DeckEval, type DeckSearch, type SearchPhase } from '../core/deckSearch';
 import type { SavedDeck } from '../core/presets';
 import { percent, progressPercent } from '../core/rank';
 import type { CardDef } from '../core/types';
 import { CARDS, npcById, ownedCards, resolveDeck, toDeckCard } from '../data';
 import { useDeckSearch, type DeckSearchRequest } from '../hooks/useDeckSearch';
 import { CardView } from './CardView';
+import { ConfirmAction } from './ConfirmAction';
+import { OutcomeBar } from './OutcomeBar';
 
 interface Props {
   draft: SetupDraft;
@@ -140,6 +142,7 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
               run={run}
               title={run.mode === 'evaluate' ? '今のデッキ' : i === 0 ? '見つかった中で最良' : `候補 ${i + 1}`}
               onUse={run.mode === 'evaluate' ? undefined : () => onUse(e.cards.map((c) => ({ sides: c.sides, type: c.type, label: c.label })))}
+              replaces={draft.myCards.some((c) => c !== null)}
             />
           ))}
 
@@ -162,16 +165,23 @@ interface ResultProps {
   run: Run;
   title: string;
   onUse?: () => void;
+  /** 今の手札が入っている(使うと上書きされる)*/
+  replaces: boolean;
 }
 
-function DeckResult({ search, evaluation, run, title, onUse }: ResultProps) {
+function DeckResult({ search, evaluation, run, title, onUse, replaces }: ResultProps) {
   const rows = variantRows(search, evaluation, run.context.set, run.context.refineSet);
+  const score = deckScore(search, evaluation);
   return (
     <div className="advisor-deck">
       <div className="advisor-deck-head">
         <strong>{title}</strong>
         {search.ordered && <span className="muted">左から順に出す並びです</span>}
-        {onUse && <button type="button" className="btn btn-sm" onClick={onUse}>このデッキを使う</button>}
+        {onUse && (replaces ? (
+          <ConfirmAction className="btn btn-sm" small label="このデッキを使う" confirmLabel="今の手札と置き換える" onConfirm={onUse} />
+        ) : (
+          <button type="button" className="btn btn-sm" onClick={onUse}>このデッキを使う</button>
+        ))}
       </div>
       <div className="hand-row">
         {evaluation.cards.map((c, i) => (
@@ -181,6 +191,7 @@ function DeckResult({ search, evaluation, run, title, onUse }: ResultProps) {
           </div>
         ))}
       </div>
+      <OutcomeBar win={score.win} draw={score.drawOrBetter - score.win} loss={1 - score.drawOrBetter} />
       <ul className="advisor-lines">
         {deckLines(search, evaluation).map((l) => (
           <li key={l.text} className={`cls cls-${l.tone}`}>{l.text}</li>

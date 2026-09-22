@@ -3,6 +3,7 @@ import { exportCollection, importCollection, withOwned, type Collection } from '
 import { CARD_TYPE_NAMES } from '../core/types';
 import { CARDS, CARDS_IN_LIST_ORDER, achievementStatus, cardNumber, normalize, ownedCards, ownershipPercent, toCardDef, type AchievementStatus, type CardInfo } from '../data';
 import { CardView } from './CardView';
+import { ConfirmAction } from './ConfirmAction';
 import { SourceTip } from './SourceTip';
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
 }
 
 type OwnedFilter = 'all' | 'owned' | 'missing';
+/** タップした時の動作。マウスの hover は常に入手方法を出すので、これはタッチのための切り替え */
+type TapMode = 'own' | 'source';
 
 const STARS = [1, 2, 3, 4, 5];
 const searchIndex = new Map(CARDS.map((c) => [c.id, normalize(c.name)]));
@@ -27,12 +30,13 @@ interface CellProps {
   owned: boolean;
   /** このカードの入手方法を吹き出しに出している */
   described: boolean;
-  onToggle: (id: number) => void;
+  /** タップ。所持の切り替えか入手方法かは親が決める(モードを prop にすると memo が効かなくなる) */
+  onTap: (card: CardInfo, el: HTMLElement) => void;
   onHover: (card: CardInfo | null, el?: HTMLElement) => void;
 }
 
 /** 475 枚を並べるので、所持が変わったカードだけ描き直す */
-const CollectionCell = memo(function CollectionCell({ card, owned, described, onToggle, onHover }: CellProps) {
+const CollectionCell = memo(function CollectionCell({ card, owned, described, onTap, onHover }: CellProps) {
   return (
     <button
       type="button"
@@ -40,7 +44,7 @@ const CollectionCell = memo(function CollectionCell({ card, owned, described, on
       aria-pressed={owned}
       aria-label={`${cardNumber(card)} ${card.name} ★${card.stars}`}
       aria-describedby={described ? TIP_ID : undefined}
-      onClick={() => onToggle(card.id)}
+      onClick={(e) => onTap(card, e.currentTarget)}
       // マウスの時だけ出す。スマホのタップでも pointerenter は来るが、出すと次に触るまで残ってしまう
       onPointerEnter={(e) => e.pointerType === 'mouse' && onHover(card, e.currentTarget)}
       onPointerLeave={() => onHover(null)}
@@ -66,6 +70,10 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
   const [tip, setTip] = useState<{ card: CardInfo; anchor: DOMRect } | null>(null);
   const tipTimer = useRef<number | undefined>(undefined);
   const tipOpen = useRef(false);
+  const tipCard = useRef<number | null>(null);
+  // ref で持つのは、memo した CollectionCell に渡す onTap を作り直さないため。表示用に state を鏡にする
+  const tapMode = useRef<TapMode>('own');
+  const [tapModeView, setTapModeView] = useState<TapMode>('own');
 
   const ownedSet = useMemo(() => new Set(collection.owned), [collection]);
   const known = useMemo(() => ownedCards(collection), [collection]);
@@ -95,8 +103,28 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
   const showTip = useCallback((next: { card: CardInfo; anchor: DOMRect } | null) => {
     window.clearTimeout(tipTimer.current);
     tipOpen.current = next !== null;
+    tipCard.current = next?.card.id ?? null;
     setTip(next);
   }, []);
+
+  const setMode = (m: TapMode) => {
+    tapMode.current = m;
+    setTapModeView(m);
+    showTip(null);
+  };
+
+  const onTap = useCallback(
+    (card: CardInfo, el: HTMLElement) => {
+      if (tapMode.current === 'own') {
+        toggle(card.id);
+        return;
+      }
+      // 入手方法を見るモード: タップで出し、同じカードをもう一度タップすると消す
+      if (tipCard.current === card.id) showTip(null);
+      else showTip({ card, anchor: el.getBoundingClientRect() });
+    },
+    [toggle, showTip],
+  );
 
   const hover = useCallback(
     (card: CardInfo | null, el?: HTMLElement) => {
@@ -121,13 +149,19 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') hide();
     };
+    // カード以外を触ったら消す(タップで出した吹き出しは、そのままでは残る)
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest('.coll-cell')) hide();
+    };
     window.addEventListener('scroll', hide, { capture: true, passive: true });
     window.addEventListener('resize', hide);
     window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDown, { capture: true });
     return () => {
       window.removeEventListener('scroll', hide, { capture: true });
       window.removeEventListener('resize', hide);
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onDown, { capture: true });
     };
   }, [tipShown, showTip]);
 
@@ -171,8 +205,9 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
       </div>
       <p className="note">ゲーム内のカードリストと同じ並びです。持っているカードをタップしてください。登録した手持ちから、対戦相手に合わせたデッキを探せます。</p>
 
-      <section className="coll-achv" aria-label="アチーブメント">
-        <h3>アチーブメント <span className="muted">達成 {achievedCount} / {achievements.length}</span></h3>
+      {/* 読むだけの情報なので畳んでおき、絞り込みとカード一覧を先頭に近づける */}
+      <details className="coll-achv">
+        <summary><h3>アチーブメント <span className="muted">達成 {achievedCount} / {achievements.length}</span></h3></summary>
         <ul className="achv-list">
           {achievements.map((a) => (
             <li key={a.achievement.id} className={`achv${a.done ? ' is-done' : ''}`}>
@@ -190,7 +225,7 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
           ))}
         </ul>
         <p className="note">ここで登録した手持ちから判定しています。ゲーム内の達成状況とは、登録が漏れている分だけずれます。</p>
-      </section>
+      </details>
 
       <div className="coll-filters">
         <div className="chips" role="group" aria-label="レアリティで絞り込む">
@@ -222,16 +257,23 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
           </div>
           <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="カード名で探す" aria-label="カード名で探す" />
         </div>
+        <div className="coll-row coll-tapmode">
+          <span className="muted">タップで</span>
+          <div className="segmented" role="group" aria-label="タップした時の動作">
+            <button type="button" className={tapModeView === 'own' ? 'seg-on' : ''} aria-pressed={tapModeView === 'own'} onClick={() => setMode('own')}>所持を切り替え</button>
+            <button type="button" className={tapModeView === 'source' ? 'seg-on' : ''} aria-pressed={tapModeView === 'source'} onClick={() => setMode('source')}>入手方法を見る</button>
+          </div>
+        </div>
         <div className="coll-row">
           <span className="muted">表示中 {shown.length} 枚</span>
           <button type="button" className="btn-tertiary" disabled={shown.length === 0} onClick={() => setShown(true)}>表示中を全て所持にする</button>
-          <button type="button" className="btn-danger btn-sm" disabled={shown.length === 0} onClick={() => setShown(false)}>表示中を全て外す</button>
+          <ConfirmAction className="btn-danger btn-sm" small label="表示中を全て外す" confirmLabel={`${shown.length} 枚を外す`} disabled={shown.length === 0} onConfirm={() => setShown(false)} />
         </div>
       </div>
 
       <div className="coll-grid">
         {shown.map((c) => (
-          <CollectionCell key={c.id} card={c} owned={ownedSet.has(c.id)} described={tip?.card.id === c.id} onToggle={toggle} onHover={hover} />
+          <CollectionCell key={c.id} card={c} owned={ownedSet.has(c.id)} described={tip?.card.id === c.id} onTap={onTap} onHover={hover} />
         ))}
       </div>
       {shown.length === 0 && <p className="result-empty">条件に合うカードがありません</p>}
@@ -246,7 +288,7 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
         <textarea id="coll-import" value={importText} onChange={(e) => setImportText(e.target.value)} rows={3} placeholder="例: 1-53,60,72" />
         <div className="coll-row">
           <button type="button" className="btn btn-sm" disabled={importText.trim() === ''} onClick={() => runImport(false)}>今の手持ちに追加する</button>
-          <button type="button" className="btn-danger btn-sm" disabled={importText.trim() === ''} onClick={() => runImport(true)}>今の手持ちと置き換える</button>
+          <ConfirmAction className="btn-danger btn-sm" small label="今の手持ちと置き換える" confirmLabel="置き換える(今の手持ちは消えます)" disabled={importText.trim() === ''} onConfirm={() => runImport(true)} />
         </div>
         {message && <p className="note note-warn" role="status">{message}</p>}
       </section>

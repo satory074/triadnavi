@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DECK_NAME_MAX, type SavedDeck } from '../core/presets';
 import { formatSides, type CardDef } from '../core/types';
+import { ConfirmAction } from './ConfirmAction';
 
 interface Props {
   decks: readonly SavedDeck[];
@@ -51,7 +52,7 @@ export function DeckPicker({ decks, current, onLoad, onSave, onRename, onDelete 
                   <span className="result-sides">{d.cards.map((c) => c.label ?? formatSides(c.sides)).join('、')}</span>
                 </button>
                 <button type="button" className="btn-tertiary" onClick={() => setEditing({ id: d.id, name: d.name })} aria-label={`${d.name} の名前を変更`}>名前を変更</button>
-                <button type="button" className="btn-danger btn-sm" onClick={() => onDelete(d.id)} aria-label={`${d.name} を削除`}>削除</button>
+                <ConfirmAction className="btn-danger btn-sm" small label="削除" confirmLabel="削除する" aria-label={`${d.name} を削除`} onConfirm={() => onDelete(d.id)} />
               </li>
             ),
           )}
