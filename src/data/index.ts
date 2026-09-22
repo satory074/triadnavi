@@ -1,6 +1,7 @@
 import { deckProblems, type Collection, type DeckCard, type DeckProblem } from '../core/collection';
 import type { Rng } from '../core/rng';
 import type { CardDef, CardType, Sides } from '../core/types';
+import achievementsJson from './achievements.json';
 import cardsJson from './cards.json';
 import npcsJson from './npcs.json';
 import sourcesJson from './sources.json';
@@ -45,7 +46,25 @@ export interface CardSource {
   where?: string;
 }
 
+/**
+ * 所持カードから判定できるアチーブメント(FFXIV Collect から `npm run data:update` で選んだもの)。
+ * count = カードを N 種類入手する(Ex. も数える)、from/to = カードリストの No.from〜No.to をすべて入手する
+ */
+export type CollectionAchievement =
+  | { id: number; name: string; count: number }
+  | { id: number; name: string; from: number; to: number };
+
+export interface AchievementStatus {
+  achievement: CollectionAchievement;
+  done: boolean;
+  /** 条件に数える所持枚数 */
+  have: number;
+  /** 達成に必要な枚数 */
+  need: number;
+}
+
 export const CARDS: readonly CardInfo[] = cardsJson as unknown as CardInfo[];
+export const ACHIEVEMENTS: readonly CollectionAchievement[] = achievementsJson as CollectionAchievement[];
 export const NPCS: readonly NpcInfo[] = npcsJson as unknown as NpcInfo[];
 export const CARD_SOURCES: ReadonlyMap<number, readonly CardSource[]> = new Map(
   (sourcesJson as { id: number; sources: CardSource[] }[]).map((x) => [x.id, x.sources]),
@@ -75,6 +94,23 @@ export function cardById(id: number): CardInfo | undefined {
  */
 export function ownedCards(c: Collection): CardInfo[] {
   return c.owned.map((id) => byId.get(id)).filter((x): x is CardInfo => x !== undefined);
+}
+
+/**
+ * 所有率(%)。同梱データのカード全体に対する所持枚数の割合を、小数 1 桁で切り捨てる
+ * (四捨五入だと 474 / 475 枚で 100.0% と出て、揃ったように見えてしまう)
+ */
+export function ownershipPercent(ownedCount: number): number {
+  return Math.floor((ownedCount * 1000) / CARDS.length) / 10;
+}
+
+/** 所持カード(ownedCards の結果)から、各アチーブメントの達成状況を出す。並びは achievements.json のまま */
+export function achievementStatus(owned: readonly CardInfo[]): AchievementStatus[] {
+  return ACHIEVEMENTS.map((a) => {
+    const have = 'count' in a ? owned.length : owned.filter((c) => !c.ex && c.order >= a.from && c.order <= a.to).length;
+    const need = 'count' in a ? a.count : a.to - a.from + 1;
+    return { achievement: a, done: have >= need, have, need };
+  });
 }
 
 /** 数字 4 つからの逆引き。ほとんどの組は 1 枚に決まる(同じ数字でタイプが違うのは 3 組だけ) */

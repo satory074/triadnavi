@@ -1,15 +1,16 @@
 // カード/NPC データの更新スクリプト。`npm run data:update` で手動実行し、生成された JSON をコミットする。
-// CI では実行しない(第三者 API の停止でデプロイが壊れないようにするため)。1 回の更新は GET 4 回。
+// CI では実行しない(第三者 API の停止でデプロイが壊れないようにするため)。1 回の更新は GET 5 回。
 //
 // 取得元:
 //   FFXIV Collect  … カードの日本語名・四辺の数字・タイプ・レアリティ・ゲーム内リストの並び・入手方法、
-//                    NPC の日本語名・場所・座標、トライアドパックの中身と値段
+//                    NPC の日本語名・場所・座標、トライアドパックの中身と値段、カード収集のアチーブメント
 //   XIVAPI v2      … NPC のデッキ(固定/可変)・固定ルール・流行ルール適用フラグ(ゲームデータそのもの)
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 
 const CARDS_URL = 'https://ffxivcollect.com/api/triad/cards?language=ja';
 const NPCS_URL = 'https://ffxivcollect.com/api/triad/npcs?language=ja';
 const PACKS_URL = 'https://ffxivcollect.com/api/triad/packs?language=ja';
+const ACHIEVEMENTS_URL = 'https://ffxivcollect.com/api/achievements?language=ja';
 const DECKS_URL =
   'https://v2.xivapi.com/api/sheet/TripleTriad?limit=500&fields=' +
   'TripleTriadCardFixed@as(raw),TripleTriadCardVariable@as(raw),TripleTriadRule@as(raw),UsesRegionalRules';
@@ -22,8 +23,8 @@ async function getJson(url) {
 
 const nonZero = (xs) => xs.filter((x) => x > 0);
 
-const [cardsRaw, npcsRaw, decksRaw, packsRaw] = await Promise.all([
-  getJson(CARDS_URL), getJson(NPCS_URL), getJson(DECKS_URL), getJson(PACKS_URL),
+const [cardsRaw, npcsRaw, decksRaw, packsRaw, achievementsRaw] = await Promise.all([
+  getJson(CARDS_URL), getJson(NPCS_URL), getJson(DECKS_URL), getJson(PACKS_URL), getJson(ACHIEVEMENTS_URL),
 ]);
 
 const cards = cardsRaw.results
@@ -178,12 +179,44 @@ const sources = cardsRaw.results
   })
   .sort((a, b) => a.id - b.id);
 
+// ---- カード収集のアチーブメント ----
+// 手持ちの画面で「達成したアチーブメント」を出すのに使う。アプリが知っているのは所持カードだけなので、
+// 所持カードから判定できる 2 種類(N 種類入手する / No.A〜No.B をすべて入手する)だけを説明文で選ぶ。
+// 文言が変わって黙って空になるのを防ぐため、想定より少なければ止める
+const COUNT_RE = /^トリプルトライアドのカードを(?:([\d,]+)種類)?入手する$/;
+const RANGE_RE = /^トリプルトライアドのカードを、No\.(\d+)からNo\.(\d+)まですべて入手する$/;
+const byCount = [];
+const byRange = [];
+for (const a of achievementsRaw.results) {
+  const d = (a.description ?? '').trim();
+  const count = d.match(COUNT_RE);
+  const range = d.match(RANGE_RE);
+  // 数字の無いランク 1 は「カードを入手する」= 1 枚
+  if (count) byCount.push({ id: a.id, name: a.name, count: count[1] ? Number(count[1].replace(/,/g, '')) : 1 });
+  else if (range) byRange.push({ id: a.id, name: a.name, from: Number(range[1]), to: Number(range[2]) });
+}
+byCount.sort((a, b) => a.count - b.count);
+byRange.sort((a, b) => a.to - b.to);
+if (byCount.length < 10) throw new Error(`カード収集のアチーブメント(N 種類入手する)が ${byCount.length} 件しかありません。説明文の形が変わっていないか確かめてください`);
+if (byRange.length === 0) throw new Error('カード収集のアチーブメント(No.A からすべて入手する)が見つかりません。説明文の形が変わっていないか確かめてください');
+for (let i = 1; i < byCount.length; i++) {
+  if (byCount[i].count <= byCount[i - 1].count) throw new Error(`アチーブメントの枚数が昇順ではありません: ${byCount[i - 1].name} と ${byCount[i].name}`);
+}
+const listNumbers = new Set(cards.filter((c) => !c.ex).map((c) => c.order));
+for (const r of byRange) {
+  for (let n = r.from; n <= r.to; n++) {
+    if (!listNumbers.has(n)) throw new Error(`${r.name} の No.${n} がカードリストにありません`);
+  }
+}
+const achievements = [...byCount, ...byRange];
+
 await mkdir(new URL('../src/data/', import.meta.url), { recursive: true });
 // 1 行 1 件にして、更新時の差分を読みやすくする
 const lines = (rows) => '[\n' + rows.map((r) => '  ' + JSON.stringify(r)).join(',\n') + '\n]\n';
 await writeFile(new URL('../src/data/cards.json', import.meta.url), lines(cards));
 await writeFile(new URL('../src/data/npcs.json', import.meta.url), lines(npcs));
 await writeFile(new URL('../src/data/sources.json', import.meta.url), lines(sources));
+await writeFile(new URL('../src/data/achievements.json', import.meta.url), lines(achievements));
 
 for (const w of warnings) console.warn('警告:', w);
-console.log(`カード ${cards.length} 枚、NPC ${npcs.length} 人、入手方法 ${sources.reduce((n, x) => n + x.sources.length, 0)} 件を書き出しました(警告 ${warnings.length} 件)`);
+console.log(`カード ${cards.length} 枚、NPC ${npcs.length} 人、入手方法 ${sources.reduce((n, x) => n + x.sources.length, 0)} 件、アチーブメント ${achievements.length} 件を書き出しました(警告 ${warnings.length} 件)`);

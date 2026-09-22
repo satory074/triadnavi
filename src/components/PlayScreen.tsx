@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { chaosExactFeasible } from '../core/analyze';
+import { toggleRule } from '../core/appState';
 import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, type MatchEvent, type MatchSetup, type RevealRef, type SwapRef } from '../core/match';
 import { guaranteeKind, placedCount, positionKey, type Position } from '../core/position';
 import { learnCards, type SavedData } from '../core/presets';
@@ -16,7 +17,9 @@ import { AnalysisPanel } from './AnalysisPanel';
 import { Board } from './Board';
 import { CardEditor } from './CardEditor';
 import { CardView } from './CardView';
+import { Icon } from './Icon';
 import { Modal } from './Modal';
+import { RuleChips } from './RuleChips';
 
 interface Props {
   setup: MatchSetup;
@@ -31,14 +34,16 @@ interface Props {
   onFirst: (first: Player) => void;
   /** 同じ設定の最初の対局からやり直す */
   onRestart: () => void;
+  /** ルールを変える。記録は残したまま、置いたカードを新しいルールで計算し直す */
+  onRules: (ruleIds: number[], fallenAceInCombo: boolean) => void;
 }
 
-export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRematch, onNewMatch, onSaved, onFirst, onRestart }: Props) {
+export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRematch, onNewMatch, onSaved, onFirst, onRestart, onRules }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const [adhoc, setAdhoc] = useState<CardDef | null>(null);
   // reveal = 相手の裏向きの手札を開く、swap = スワップで来たカードを選ぶ、mismatch = 入力した手札と違うカードが出た
   const [picker, setPicker] = useState<'reveal-pool' | 'reveal-editor' | 'swap-pool' | 'swap-editor' | 'mismatch' | null>(null);
-  const [fixMode, setFixMode] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [swapMode, setSwapMode] = useState(false);
   // スワップで相手から来たカード(渡す自分のカードを選ぶまで確定しない)
   const [swapIn, setSwapIn] = useState<{ ref: SwapRef; card: CardDef; index: number } | null>(null);
@@ -111,7 +116,6 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   const openReveal = () => setPicker(view.oppPool.length > 0 ? 'reveal-pool' : 'reveal-editor');
 
   const toggleSwap = () => {
-    setFixMode(false);
     setSwapIn(null);
     setSwapMode(!swapMode);
     reset();
@@ -136,12 +140,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   };
 
   const onCell = (cell: number) => {
-    const c = view.state.board[cell];
-    if (fixMode) {
-      if (c) onEvents([...events.slice(0, view.applied), { t: 'setOwner', cell, owner: (c.owner ^ 1) as Player }]);
-      return;
-    }
-    if (c || view.finished || swapMode) return;
+    if (view.state.board[cell] || view.finished || swapMode) return;
     place(view.turn, cell, selected, adhoc);
   };
 
@@ -159,12 +158,17 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   };
 
   const restart = () => {
-    setFixMode(false);
     setSwapMode(false);
     setSwapIn(null);
     setCopied(false);
     reset();
     onRestart();
+  };
+
+  const ruleIds = ruleIdsOf(setup.rules);
+  const changeRules = (ids: number[], fallenAceInCombo: boolean) => {
+    onRules(ids, fallenAceInCombo);
+    reset();
   };
 
   const copyDiscrepancy = async () => {
@@ -200,7 +204,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   const unlisted = view.cards.slice(baseCount);
   const npcKey = setup.npcId !== undefined ? String(setup.npcId) : null;
   const rematch = buildRematch(setup, view);
-  const canPlace = !view.finished && !fixMode && !swapMode && (selected !== null || adhoc !== null);
+  const canPlace = !view.finished && !swapMode && (selected !== null || adhoc !== null);
 
   const prompt = view.finished
     ? ''
@@ -221,18 +225,27 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
       <div className="toolbar">
         <div className="rule-summary">
           {setup.round > 0 && <span className="chip chip-on">サドンデス 再戦 {setup.round} 回目</span>}
-          {ruleIdsOf(setup.rules).map((id) => <span className="chip chip-static" key={id}>{RULE_NAMES[id]}</span>)}
-          {ruleIdsOf(setup.rules).length === 0 && <span className="muted">追加ルールなし</span>}
+          {ruleIds.map((id) => <span className="chip chip-static" key={id}>{RULE_NAMES[id]}</span>)}
+          {ruleIds.length === 0 && <span className="muted">追加ルールなし</span>}
+          <button type="button" className="tool-btn tool-btn-sm" onClick={() => setRulesOpen(true)}>
+            <Icon name="rules" />ルールを変更
+          </button>
         </div>
         <div className="toolbar-actions">
-          <button type="button" className="btn-quiet" onClick={undo} disabled={view.applied === 0}>1 手戻す</button>
-          <button type="button" className="btn-quiet" onClick={restart} disabled={events.length === 0 && setup.round === 0}>はじめから</button>
+          <button type="button" className="tool-btn" onClick={undo} disabled={view.applied === 0}>
+            <Icon name="undo" />1 手戻す
+          </button>
+          <button type="button" className="tool-btn" onClick={restart} disabled={events.length === 0 && setup.round === 0}>
+            <Icon name="restart" />はじめから
+          </button>
           {view.placed === 0 && !view.finished && (
-            <button type="button" className={`btn-quiet${swapMode ? ' is-on' : ''}`} aria-pressed={swapMode} onClick={toggleSwap}>スワップ</button>
+            <button type="button" className={`tool-btn${swapMode ? ' is-on' : ''}`} aria-pressed={swapMode} onClick={toggleSwap}>
+              <Icon name="swap" />スワップ
+            </button>
           )}
-          <button type="button" className={`btn-quiet${fixMode ? ' is-on' : ''}`} aria-pressed={fixMode}
-            onClick={() => { setSwapMode(false); setSwapIn(null); setFixMode(!fixMode); }}>所有を修正</button>
-          <button type="button" className="btn-quiet" onClick={onNewMatch}>設定に戻る</button>
+          <button type="button" className="tool-btn tool-btn-nav" onClick={onNewMatch}>
+            <Icon name="back" />設定に戻る
+          </button>
         </div>
       </div>
 
@@ -247,7 +260,6 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
         </div>
       )}
 
-      {fixMode && <p className="note note-warn">盤面のカードをタップすると、青と赤が入れ替わります。ゲームの表示に合わせてください。</p>}
       {swapMode && (
         <p className="note note-warn">
           スワップ: 相手から来たカードと、相手に渡した自分のカードを 1 枚ずつタップしてください。
@@ -288,7 +300,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
           )}
           {adhoc && <p className="note">出たカード: {adhoc.label ?? adhoc.sides.join('/')}。置かれたマスをタップしてください。</p>}
 
-          <Board view={view} shiftOf={shiftOf} recommendedCell={recommendedMove && myTurn ? recommendedMove.move.cell : null} canPlace={canPlace} fixMode={fixMode} onCell={onCell} />
+          <Board view={view} shiftOf={shiftOf} recommendedCell={recommendedMove && myTurn ? recommendedMove.move.cell : null} canPlace={canPlace} onCell={onCell} />
 
           <div className="hand-row hand-my" aria-label="自分の手札">
             {view.myHand.map((i) => {
@@ -331,6 +343,18 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
         </div>
       </div>
 
+      {rulesOpen && (
+        <Modal title="ルールを変更" onClose={() => setRulesOpen(false)}>
+          <p className="note">置いたカードも新しいルールで計算し直します。「はじめから」でもこのルールで始まります。</p>
+          <RuleChips ruleIds={ruleIds} onToggle={(id) => changeRules(toggleRule(ruleIds, id), setup.options.fallenAceInCombo)} />
+          {setup.rules.fallenAce && (setup.rules.same || setup.rules.plus) && (
+            <label className="check">
+              <input type="checkbox" checked={setup.options.fallenAceInCombo} onChange={(e) => changeRules(ruleIds, e.target.checked)} />
+              コンボの連鎖中もエースキラーを有効にする(実機での検証例が無い挙動です。食い違ったら外してください)
+            </label>
+          )}
+        </Modal>
+      )}
       {picker === 'reveal-pool' && (
         <Modal title="相手のカード" onClose={() => setPicker(null)}>
           <p className="note">相手の手札に入れます。相手が今このカードを出したなら、続けて置かれたマスをタップしてください。</p>

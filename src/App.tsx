@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { draftToSetup, parseAppState, restartMatch, type AppState } from './core/appState';
+import { changeRules, draftToSetup, parseAppState, restartMatch, type AppState } from './core/appState';
 import { parseCollection } from './core/collection';
 import { parsePrefs } from './core/prefs';
 import { parseSaved } from './core/presets';
@@ -55,6 +55,7 @@ export default function App() {
           // 下書きにも書いておくと、「はじめから」の後も直前に選んだ先攻のまま始まる
           onFirst={(first) => setApp((s) => ({ ...s, draft: { ...s.draft, first }, setup: s.setup && { ...s.setup, first } }))}
           onRestart={() => setApp(restartMatch)}
+          onRules={(ruleIds, fallenAceInCombo) => setApp((s) => changeRules(s, ruleIds, fallenAceInCombo))}
           onSaved={setSaved}
         />
       ) : (

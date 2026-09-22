@@ -421,14 +421,23 @@ input:not([type]) {
   white-space: nowrap;
 }
 
-.deck-save {
+.deck-save,
+.deck-rename {
   display: flex;
   gap: 0.5rem;
   align-items: center;
 }
 
-.deck-save input {
+.deck-save input,
+.deck-rename input {
   flex: 1;
+  min-width: 0;
+}
+
+/* 名前を変更中の行。読み込みボタンと同じ高さに収める */
+.deck-rename {
+  flex: 1;
+  padding: 0.3rem 0.4rem 0.3rem 0.5rem;
 }
 
 .pool {
@@ -575,6 +584,51 @@ input:not([type]) {
 .coll-head .muted {
   flex: 1;
   font-size: 0.85rem;
+}
+
+/* 所有率のバー。見出しの「所有率 N%」と同じ値を、細い金の帯で見せる */
+.meter {
+  height: 0.35rem;
+  margin: 0.45rem 0 0.2rem;
+  border-radius: 999px;
+  background: var(--mat-950);
+  box-shadow: inset 0 0 0 1px var(--mat-line);
+  overflow: hidden;
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gilt-soft), var(--gilt));
+}
+
+.coll-achv h3 {
+  margin-top: 0.7rem;
+}
+
+.achv-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.3rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 達成したアチーブメントの札。金の枠に「✓」を添える(押せる物ではないので、ボタンの見た目にはしない) */
+.achv {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--gilt-soft);
+  border-radius: 0.35rem;
+  background: rgba(216, 179, 90, 0.1);
+  color: var(--gilt);
+  font-size: 0.8rem;
+}
+
+.achv::before {
+  content: '✓ ';
+  font-weight: 700;
 }
 
 .coll-filters {
@@ -873,8 +927,25 @@ textarea {
 .side-1 { grid-area: 2 / 3; }
 .side-2 { grid-area: 3 / 2; }
 
-.side-up { color: #b9f5cf; }
-.side-down { color: #ffc9c4; }
+/* タイプアセンド/ディセンドの加減。ゲームと同じく、4 辺の数字は変えずにひし形の中央に出す */
+.side-shift {
+  grid-area: 2 / 2;
+  padding: 0.06em 0.26em;
+  border-radius: 0.35em;
+  background: rgba(0, 0, 0, 0.62);
+  font-size: 0.7em;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  text-shadow: none;
+}
+
+/* 下地を敷いているので、絵がある時の暗い円は要らない */
+.has-art .side-shift::before {
+  content: none;
+}
+
+.shift-up { color: var(--good); }
+.shift-down { color: var(--bad); }
 
 .side-active {
   color: var(--gilt);
@@ -963,10 +1034,6 @@ textarea {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 
-.board-fix {
-  border-style: dashed;
-}
-
 .cell {
   aspect-ratio: 4 / 5;
   border-radius: 9%/7%;
@@ -1013,12 +1080,9 @@ textarea {
 
 /* ---- 対局画面の配置 ---- */
 .toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.3rem 0.8rem;
-  margin-bottom: 0.6rem;
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
 }
 
 .rule-summary {
@@ -1028,10 +1092,95 @@ textarea {
   align-items: center;
 }
 
+/* 対局の操作(戻す・はじめから・スワップ)と、画面の移動(設定に戻る)を離して置く */
 .toolbar-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.2rem;
+  gap: 0.4rem;
+}
+
+.tool-btn-nav {
+  margin-left: auto;
+}
+
+/* 対局画面のボタン。文字だけの .btn-quiet だと押せる所に見えないので、枠とアイコンを付ける */
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.6rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--gilt-soft);
+  border-radius: 0.5rem;
+  background: var(--mat-700);
+  color: var(--paper);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.tool-btn .icon {
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  color: var(--gilt);
+}
+
+.tool-btn:hover:not(:disabled) {
+  background: var(--mat-600);
+  border-color: var(--gilt);
+}
+
+.tool-btn:disabled {
+  border-color: var(--mat-line);
+  opacity: 0.45;
+}
+
+/* スワップの入力中。.btn-quiet.is-on と同じく金のベタ塗りで反転する */
+.tool-btn.is-on,
+.tool-btn.is-on:hover {
+  background: var(--gilt);
+  border-color: var(--gilt);
+  color: #1d1705;
+}
+
+.tool-btn.is-on .icon {
+  color: inherit;
+}
+
+/* ルールのチップの横に置く小さい版 */
+.tool-btn-sm {
+  min-height: 2rem;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+/* スマホ幅では横に並ばないので、アイコンを上・文字を下にして等幅のタブのように並べる */
+@media (max-width: 36rem) {
+  .toolbar-actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+  }
+
+  .toolbar-actions .tool-btn {
+    flex-direction: column;
+    gap: 0.2rem;
+    min-height: 3.3rem;
+    padding: 0.35rem 0.2rem;
+    font-size: 0.76rem;
+  }
+
+  .toolbar-actions .tool-btn .icon {
+    width: 1.3rem;
+    height: 1.3rem;
+  }
+
+  .tool-btn-nav {
+    margin-left: 0;
+  }
 }
 
 .first-pick {

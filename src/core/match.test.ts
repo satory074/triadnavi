@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, type MatchEvent, type MatchSetup } from './match';
 import { guaranteeKind } from './position';
-import { learnCards, parseSaved, EMPTY_SAVED } from './presets';
+import { learnCards, parseSaved, renameDeck, EMPTY_SAVED } from './presets';
 import { buildRematch, MAX_REMATCHES } from './suddenDeath';
 import { DEFAULT_OPTIONS, NO_RULES, type CardDef, type CardType } from './types';
 
@@ -378,5 +378,13 @@ describe('保存データ', () => {
     const d1 = learnCards(EMPTY_SAVED, '42', [c(1, 1, 1, 1), c(9, 9, 9, 9), c(9, 9, 9, 9)], known);
     expect(d1.learned['42']).toEqual([c(9, 9, 9, 9)]);
     expect(learnCards(d1, '42', [c(9, 9, 9, 9)], known)).toBe(d1);
+  });
+
+  it('デッキ名を変えても ID とカードは変わらず、空の名前では何も変わらない', () => {
+    const cards = [c(1, 1, 1, 1), c(2, 2, 2, 2), c(3, 3, 3, 3), c(4, 4, 4, 4), c(5, 5, 5, 5)];
+    const data = { ...EMPTY_SAVED, decks: [{ id: 'a', name: 'メイン', cards }, { id: 'b', name: 'サブ', cards }] };
+    const renamed = renameDeck(data, 'a', '  対メメルン  ');
+    expect(renamed.decks).toEqual([{ id: 'a', name: '対メメルン', cards }, data.decks[1]]);
+    expect(renameDeck(data, 'a', '   ')).toBe(data);
   });
 });

@@ -139,6 +139,18 @@ export function restartMatch(state: AppState): AppState {
 }
 
 /**
+ * 対局中にルールを変える(対局画面の「ルールを変更」)。記録(events)はそのまま残し、置いたカードは
+ * replay() が新しいルールで計算し直す。replay() の検証(手番・マス・手札)はルールに依らないので、記録が途中で切れることはない。
+ * 下書きにも同じ値を書く: 「はじめから」(restartMatch)は下書きから setup を作り直し、再読み込み(parseAppState)は
+ * options を下書きから作り直すので、setup だけ変えると元のルールに戻ってしまう。
+ */
+export function changeRules(state: AppState, ruleIds: readonly number[], fallenAceInCombo: boolean): AppState {
+  const ids = ruleIds.filter((id) => SELECTABLE_RULE_IDS.includes(id));
+  const setup = state.setup && { ...state.setup, rules: rulesFromIds(ids), options: { ...state.setup.options, fallenAceInCombo } };
+  return { ...state, draft: { ...state.draft, ruleIds: ids, fallenAceInCombo }, setup };
+}
+
+/**
  * デッキの評価に使う対戦条件。ルーレットとスワップは下書きのルールには入らない(対戦が始まってから決まる)ので、
  * NPC の固定ルールから受け取る。NPC を選んでいない時は空でよい。
  */

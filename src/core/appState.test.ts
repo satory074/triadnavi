@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  EMPTY_DRAFT, INITIAL_STATE, applyNpc, clearOppSlot, draftToSetup, parseAppState, restartMatch, revealPoolCard, setupWarnings, toggleRule,
+  EMPTY_DRAFT, INITIAL_STATE, applyNpc, changeRules, clearOppSlot, draftToSetup, parseAppState, restartMatch, revealPoolCard, setupWarnings, toggleRule,
   type AppState,
 } from './appState';
 import { replay } from './match';
@@ -95,5 +95,26 @@ describe('はじめから', () => {
     expect(next.setup!.round).toBe(0);
     expect(next.setup!.myHand).toEqual(draft.myCards);
     expect(next.setup!.first).toBe(1);
+  });
+});
+
+describe('対局中のルール変更', () => {
+  it('記録は 1 件も消えず、「はじめから」でも再読み込みでも新しいルールのまま', () => {
+    const draft = { ...EMPTY_DRAFT, myCards: [c(1), c(2), c(3), c(4), c(5)], oppCards: [c(6), c(7), c(8), c(9), c(10)], ruleIds: [2] };
+    const events: AppState['events'] = [
+      { t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 },
+      { t: 'place', by: 1, card: { from: 'opp', index: 0 }, cell: 1 },
+    ];
+    const next = changeRules({ phase: 'play', draft, setup: draftToSetup(draft)!, events }, [2, 4, 11], false);
+    expect(next.events).toEqual(events);
+    expect(replay(next.setup!, next.events).applied).toBe(events.length);
+
+    const restarted = restartMatch(next);
+    expect(restarted.setup!.rules.same).toBe(true);
+    expect(restarted.setup!.options.fallenAceInCombo).toBe(false);
+
+    const reloaded = parseAppState(JSON.stringify(next));
+    expect(reloaded.setup!.rules).toEqual(next.setup!.rules);
+    expect(reloaded.setup!.options.fallenAceInCombo).toBe(false);
   });
 });

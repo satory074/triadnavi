@@ -8,15 +8,14 @@ interface Props {
   shiftOf: (cardIndex: number) => number;
   recommendedCell: number | null;
   canPlace: boolean;
-  fixMode: boolean;
   onCell: (cell: number) => void;
 }
 
 const CAUSE_LABEL: Record<Flip['cause'], string> = { basic: '', same: 'セイム', plus: 'プラス', combo: 'コンボ' };
 
-export function Board({ view, shiftOf, recommendedCell, canPlace, fixMode, onCell }: Props) {
+export function Board({ view, shiftOf, recommendedCell, canPlace, onCell }: Props) {
   return (
-    <div className={`board${fixMode ? ' board-fix' : ''}`} role="grid" aria-label="盤面">
+    <div className="board" role="grid" aria-label="盤面">
       {view.state.board.map((c, cell) => {
         if (!c) {
           return (
@@ -24,7 +23,7 @@ export function Board({ view, shiftOf, recommendedCell, canPlace, fixMode, onCel
               type="button"
               key={cell}
               className={`cell cell-empty${recommendedCell === cell ? ' is-recommended' : ''}${canPlace ? ' cell-open' : ''}`}
-              disabled={!canPlace || fixMode}
+              disabled={!canPlace}
               onClick={() => onCell(cell)}
               aria-label={`${CELL_NAMES[cell]}に置く`}
             />
@@ -39,7 +38,6 @@ export function Board({ view, shiftOf, recommendedCell, canPlace, fixMode, onCel
               owner={c.owner}
               shift={shiftOf(c.card)}
               badge={badge || undefined}
-              onClick={fixMode ? () => onCell(cell) : undefined}
               ariaLabel={`${CELL_NAMES[cell]}: ${c.owner === 0 ? '自分' : '相手'}のカード`}
             />
           </div>

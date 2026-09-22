@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { exportCollection, importCollection, withOwned, type Collection } from '../core/collection';
 import { CARD_TYPE_NAMES } from '../core/types';
-import { CARDS, CARDS_IN_LIST_ORDER, cardNumber, normalize, ownedCards, toCardDef, type CardInfo } from '../data';
+import { CARDS, CARDS_IN_LIST_ORDER, achievementStatus, cardNumber, normalize, ownedCards, ownershipPercent, toCardDef, type AchievementStatus, type CardInfo } from '../data';
 import { CardView } from './CardView';
 import { SourceTip } from './SourceTip';
 
@@ -69,6 +69,12 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
 
   const ownedSet = useMemo(() => new Set(collection.owned), [collection]);
   const known = useMemo(() => ownedCards(collection), [collection]);
+  const percent = ownershipPercent(known.length);
+  const achievements = useMemo(() => achievementStatus(known), [known]);
+  const achieved = achievements.filter((a) => a.done);
+  // 枚数のアチーブメントは昇順に並んでいるので、最初の未達成が次の目標
+  const nextCount = achievements.find((a) => 'count' in a.achievement && !a.done);
+  const openRanges = achievements.filter((a) => !('count' in a.achievement) && !a.done);
 
   const shown = useMemo(() => {
     const q = normalize(query);
@@ -160,10 +166,31 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
     <main className="collection">
       <div className="coll-head">
         <h2>手持ちのカード</h2>
-        <span className="muted">所持 {known.length} / {CARDS.length} 枚</span>
+        <span className="muted">所持 {known.length} / {CARDS.length} 枚(所有率 {percent}%)</span>
         <button type="button" className="btn-quiet" onClick={onClose}>戻る</button>
       </div>
+      <div className="meter" role="progressbar" aria-label="所有率" aria-valuemin={0} aria-valuemax={CARDS.length} aria-valuenow={known.length} aria-valuetext={`${percent}%`}>
+        <span style={{ width: `${percent}%` }} />
+      </div>
       <p className="note">ゲーム内の「カードリスト」と同じ並びです。持っているカードをタップしてください。ここで登録した手持ちから、対戦相手に合わせたデッキを探せます。カードにマウスを乗せると入手方法が出ます。</p>
+
+      <section className="coll-achv" aria-label="アチーブメント">
+        <h3>達成したアチーブメント</h3>
+        {achieved.length > 0 ? (
+          <ul className="achv-list">
+            {achieved.map((a) => (
+              <li key={a.achievement.id} className="achv" title={achievementCondition(a)}>{a.achievement.name}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">まだありません</p>
+        )}
+        {nextCount && <p className="note">次は「{nextCount.achievement.name}」: あと {nextCount.need - nextCount.have} 種類({achievementCondition(nextCount)})</p>}
+        {openRanges.map((a) => (
+          <p className="note" key={a.achievement.id}>「{a.achievement.name}」({achievementCondition(a)}): {a.have} / {a.need} 枚</p>
+        ))}
+        <p className="note">ここで登録した手持ちから判定しています。ゲーム内の達成状況とは、登録が漏れている分だけずれます。</p>
+      </section>
 
       <div className="coll-filters">
         <div className="chips" role="group" aria-label="レアリティで絞り込む">
@@ -224,4 +251,9 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
       </section>
     </main>
   );
+}
+
+/** アチーブメントの達成条件(ゲーム内の説明文を短くしたもの) */
+function achievementCondition({ achievement: a }: AchievementStatus): string {
+  return 'count' in a ? `カードを ${a.count} 種類入手する` : `No.${a.from}〜No.${a.to} をすべて入手する`;
 }

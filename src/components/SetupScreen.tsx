@@ -4,7 +4,7 @@ import {
 } from '../core/appState';
 import { DECK_PROBLEM_TEXT, type Collection } from '../core/collection';
 import type { SavedData, SavedDeck } from '../core/presets';
-import { sameCard } from '../core/presets';
+import { renameDeck, sameCard } from '../core/presets';
 import { rulesFromIds } from '../core/rules';
 import type { CardDef } from '../core/types';
 import { handProblems, npcById, npcCards, toCardDef, type NpcInfo } from '../data';
@@ -113,6 +113,7 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
           current={draft.myCards}
           onLoad={(d) => onDraft({ ...draft, myCards: d.cards })}
           onSave={saveDeck}
+          onRename={(id, name) => onSaved(renameDeck(saved, id, name))}
           onDelete={(id) => onSaved({ ...saved, decks: saved.decks.filter((d) => d.id !== id) })}
         />
         <DeckAdvisor

@@ -12,7 +12,7 @@ interface Props {
   selected?: boolean;
   recommended?: boolean;
   dimmed?: boolean;
-  /** タイプアセンド/ディセンドによる補正値(表示は補正後の値) */
+  /** タイプアセンド/ディセンドによる補正値。ゲームと同じく、数字は元のまま表示し、中央に加減を出す */
   shift?: number;
   /** 入力中の表示: 確定済みの数字と、次に入る辺 */
   partial?: number[];
@@ -21,8 +21,6 @@ interface Props {
   onClick?: () => void;
   ariaLabel?: string;
 }
-
-const clamp = (v: number) => Math.min(10, Math.max(1, v));
 
 /** 数字をゲームと同じひし形(上・左右・下)に並べたカード。設定が入っていて絵が決まるカードには、数字の下に絵を敷く */
 export function CardView({ card, empty, owner, size = 'md', selected, recommended, dimmed, shift = 0, partial, showName = true, badge, onClick, ariaLabel }: Props) {
@@ -42,9 +40,11 @@ export function CardView({ card, empty, owner, size = 'md', selected, recommende
   const side = (d: number) => {
     if (partial) return d < partial.length ? formatSide(partial[d]) : d === partial.length ? '_' : '';
     if (!card) return '';
-    return formatSide(card.type === 0 ? card.sides[d] : clamp(card.sides[d] + shift));
+    return formatSide(card.sides[d]);
   };
   const active = partial ? partial.length : -1;
+  // タイプの無いカードには補正が掛からない。補正後の値のクランプ([1,10])はエンジン側の仕事で、表示には出さない
+  const shown = !partial && card && card.type !== 0 ? shift : 0;
 
   const body = (
     <>
@@ -69,10 +69,15 @@ export function CardView({ card, empty, owner, size = 'md', selected, recommende
       ) : (
         <span className="card-sides">
           {[0, 3, 1, 2].map((d) => (
-            <span key={d} className={`side side-${d}${active === d ? ' side-active' : ''}${shift !== 0 && card?.type ? (shift > 0 ? ' side-up' : ' side-down') : ''}`}>
+            <span key={d} className={`side side-${d}${active === d ? ' side-active' : ''}`}>
               {side(d)}
             </span>
           ))}
+          {shown !== 0 && (
+            <span className={`side side-shift ${shown > 0 ? 'shift-up' : 'shift-down'}`}>
+              {shown > 0 ? `+${shown}` : `−${-shown}`}
+            </span>
+          )}
         </span>
       )}
       {card && card.type !== 0 && <span className="card-type">{CARD_TYPE_NAMES[card.type]}</span>}

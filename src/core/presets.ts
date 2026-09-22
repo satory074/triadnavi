@@ -52,6 +52,16 @@ export function parseSaved(raw: string | null): SavedData {
   }
 }
 
+/** デッキ名の上限。保存時の入力欄(maxLength)と同じ */
+export const DECK_NAME_MAX = 20;
+
+/** 保存済みデッキの名前を変える。前後の空白は落とし、空なら変えない(名前の無いデッキを作らない) */
+export function renameDeck(data: SavedData, id: string, name: string): SavedData {
+  const next = name.trim().slice(0, DECK_NAME_MAX);
+  if (next === '') return data;
+  return { ...data, decks: data.decks.map((d) => (d.id === id ? { ...d, name: next } : d)) };
+}
+
 export function sameCard(a: CardDef, b: CardDef): boolean {
   return a.type === b.type && a.sides.every((v, i) => v === b.sides[i]);
 }

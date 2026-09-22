@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeRng } from '../core/rng';
 import {
-  CARDS, CARDS_IN_LIST_ORDER, CARD_SOURCES, NPCS, artIdOf, cardArtUrl, cardNumber, cardSources, findBySides, handProblems, normalize, npcCards, ownedCards, resolveCardIds,
+  ACHIEVEMENTS, CARDS, CARDS_IN_LIST_ORDER, CARD_SOURCES, NPCS, achievementStatus, artIdOf, cardArtUrl, cardNumber, cardSources, findBySides, handProblems, normalize, npcCards, ownedCards, ownershipPercent, resolveCardIds,
   resolveDeck, samplePriorCard, searchCards, searchNpcs, toCardDef, typeFromSides,
 } from './index';
 
@@ -99,6 +99,31 @@ describe('所持カード', () => {
   // ヘッダーのボタンの枚数と、手持ちの画面の「所持 N / 475 枚」が食い違わないための不変条件
   it('同梱データに無い ID は数えない', () => {
     expect(ownedCards({ owned: [1, 2, 9999] }).map((c) => c.id)).toEqual([1, 2]);
+  });
+});
+
+describe('所有率とアチーブメント', () => {
+  it('1 枚でも欠けていれば所有率は 100% にならない', () => {
+    expect(ownershipPercent(CARDS.length - 1)).toBeLessThan(100);
+    expect(ownershipPercent(CARDS.length)).toBe(100);
+  });
+
+  it('枚数のアチーブメントは昇順で、範囲のアチーブメントの番号は全てカードリストにある', () => {
+    const counts = ACHIEVEMENTS.flatMap((a) => ('count' in a ? [a.count] : []));
+    expect(counts.length).toBeGreaterThanOrEqual(10);
+    for (let i = 1; i < counts.length; i++) expect(counts[i]).toBeGreaterThan(counts[i - 1]);
+    const numbers = new Set(CARDS.filter((c) => !c.ex).map((c) => c.order));
+    for (const a of ACHIEVEMENTS) {
+      if ('count' in a) continue;
+      for (let n = a.from; n <= a.to; n++) expect(numbers.has(n), `${a.name} No.${n}`).toBe(true);
+    }
+  });
+
+  it('上のランクを達成していれば、下のランクも全て達成している', () => {
+    for (const n of [0, 1, 29, 30, 120, 311, 450, CARDS.length]) {
+      const done = achievementStatus(CARDS_IN_LIST_ORDER.slice(0, n)).filter((s) => 'count' in s.achievement).map((s) => s.done);
+      expect(done.indexOf(false) === -1 || done.lastIndexOf(true) < done.indexOf(false), `${n} 枚`).toBe(true);
+    }
   });
 });
 
