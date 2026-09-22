@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { matchupFromDraft, type SetupDraft } from '../core/appState';
 import type { Collection, DeckCard } from '../core/collection';
-import { matchupKey, matchupProblems, type DeckContext, type DeckEvalKind } from '../core/deckEval';
+import { matchupKey, matchupProblems, poolShort, type DeckContext, type DeckEvalKind } from '../core/deckEval';
 import { DECK_KIND_LABEL, deckKindNote, deckLines, matchupCautions, scenarioSummary, stopReasonText, variantRows } from '../core/deckRank';
 import { deckScore, deckSearchProgress, prepareDeckSearch, topDecks, type DeckEval, type DeckSearch, type SearchPhase } from '../core/deckSearch';
 import type { SavedDeck } from '../core/presets';
 import { percent, progressPercent } from '../core/rank';
 import type { CardDef } from '../core/types';
-import { CARDS, npcById, ownedCards, resolveDeck, toDeckCard } from '../data';
+import { ALL_DECK_CARDS, npcById, ownedCards, preMatchRules, resolveDeck, toDeckCard, withPrior } from '../data';
 import { useDeckSearch, type DeckSearchRequest } from '../hooks/useDeckSearch';
 import { CardView } from './CardView';
 import { ConfirmAction } from './ConfirmAction';
@@ -39,13 +39,12 @@ const PHASE_TEXT: Record<SearchPhase, string> = {
   done: '完了',
 };
 
-const ALL_CARDS: DeckCard[] = CARDS.map(toDeckCard);
-
 /** 同梱データに無い手入力のカードは、評価するだけなので仮の ID を振る */
 function asDeckCards(cards: readonly CardDef[]): DeckCard[] {
   const resolved = resolveDeck(cards);
   return resolved ? resolved.map(toDeckCard) : cards.map((c, i) => ({ ...c, id: -(i + 1), stars: 0 }));
 }
+
 
 /**
  * 今のデッキの評価と、手持ちからのデッキの提案。探索は数分かかることがあるので、背景クリックで閉じてしまうモーダルではなく、
@@ -58,7 +57,7 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
   const { search, running, error, stop } = useDeckSearch(run?.request ?? null);
 
   const npc = draft.npcId === null ? undefined : npcById(draft.npcId);
-  const matchup = useMemo(() => matchupFromDraft(draft, npc?.rules ?? []), [draft, npc]);
+  const { matchup, fill } = useMemo(() => withPrior(matchupFromDraft(draft, preMatchRules(draft))), [draft]);
   const key = matchupKey(matchup);
   const blocked = matchupProblems(matchup).length > 0;
   const myDeck = draft.myCards.every((c) => c !== null) ? (draft.myCards as CardDef[]) : null;
@@ -71,9 +70,9 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
 
   const start = (mode: Mode) => {
     const decks = mode === 'evaluate' ? [asDeckCards(myDeck!)] : [...(myDeck ? [myDeck] : []), ...savedDecks.map((d) => d.cards)].map(asDeckCards);
-    const prepared = prepareDeckSearch({ matchup, mode: mode === 'evaluate' ? 'evaluate' : 'search', owned: mode === 'all' ? ALL_CARDS : owned, decks });
+    const p = prepareDeckSearch({ matchup, mode: mode === 'evaluate' ? 'evaluate' : 'search', owned: mode === 'all' ? ALL_DECK_CARDS : owned, decks, fill });
     const runId = (run?.request.runId ?? 0) + 1;
-    setRun({ mode, matchupKey: key, kind: prepared.kind, context: prepared.context, request: { runId, context: prepared.context, start: prepared.search } });
+    setRun({ mode, matchupKey: key, kind: p.kind, context: p.context, request: { runId, context: p.context, start: p.search } });
   };
 
   const progress = search ? deckSearchProgress(search) : null;
@@ -148,8 +147,8 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
 
           <details className="fineprint">
             <summary>前提と注意</summary>
-            <p className="note">{deckKindNote(run.kind)}</p>
-            {matchupCautions(matchup, npc?.usesRegional ?? false).map((t) => (
+            <p className="note">{deckKindNote(run.kind, poolShort(matchup) ? matchup.oppPrior : undefined)}</p>
+            {matchupCautions(matchup, npc?.usesRegional ?? false, npc ? 'npc' : 'player').map((t) => (
               <p className="note" key={t}>{t}</p>
             ))}
           </details>

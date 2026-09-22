@@ -315,7 +315,39 @@ describe('matchupFromDraft', () => {
     expect(matchupProblems(m)).toEqual([]);
   });
 
-  it('相手が分からない下書き: 候補が足りないので評価できない', () => {
-    expect(matchupProblems(matchupFromDraft(EMPTY_DRAFT, []))).toEqual(['oppUnknown']);
+  it('相手が分からない下書き: 候補が足りない分は想定(oppPrior)で埋めるので評価できる。想定が無ければ評価できない', () => {
+    const m = matchupFromDraft(EMPTY_DRAFT, []);
+    expect(m.oppPrior).toEqual({ kind: 'level', level: 2 });
+    expect(matchupProblems(m)).toEqual([]);
+    expect(matchupProblems({ ...m, oppPrior: undefined })).toEqual(['oppUnknown']);
+  });
+});
+
+describe('想定から引いた手札のシナリオ', () => {
+  const fill = (r: Rng, _known: readonly CardDef[], count: number) => cards(r, count);
+
+  it('候補が無くても想定があればシナリオが並び、結果は推定で、保証(上位集合)は調べない。同じシードなら同じシナリオ', () => {
+    // オールオープンでも「相手のデッキがその分布から来る」仮定の上なので推定
+    const m = matchup(makeRng(1), { ruleIds: [2], oppKnown: [], oppPool: [], oppUnknown: 5, oppPrior: { kind: 'meta' } });
+    const set = makeScenarios(m, { ...OPT, rng: makeRng(1), fill });
+    expect(set.scenarios.length).toBeGreaterThan(0);
+    expect(set.scenarios.every((sc) => sc.oppHand.length === 5)).toBe(true);
+    expect(set.handCount).toBe(0);
+    expect(deckEvalKind(m, set)).toBe('estimate');
+    expect(supersetApplicable(m)).toBe(false);
+    expect(makeScenarios(m, { ...OPT, rng: makeRng(1), fill })).toEqual(set);
+    expect(() => makeScenarios(m, { ...OPT, rng: makeRng(1) })).toThrow();
+  });
+
+  it('候補が一部あれば候補を先に使い、足りない分だけ想定から引く', () => {
+    const known = cards(makeRng(2), 1);
+    const poolCards = cards(makeRng(3), 2);
+    const m = matchup(makeRng(1), { oppKnown: known, oppPool: poolCards, oppUnknown: 4, oppPrior: { kind: 'level', level: 3 } });
+    const set = makeScenarios(m, { ...OPT, rng: makeRng(1), fill });
+    for (const sc of set.scenarios) {
+      expect(sc.oppHand.slice(0, 1)).toEqual(known);
+      expect(sc.oppHand.length).toBe(5);
+      expect(poolCards.every((c) => sc.oppHand.includes(c))).toBe(true);
+    }
   });
 });

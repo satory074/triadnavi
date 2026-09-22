@@ -1,9 +1,15 @@
+import type { SetupDraft } from '../core/appState';
 import { deckProblems, type Collection, type DeckCard, type DeckProblem } from '../core/collection';
-import type { Rng } from '../core/rng';
+import { matchupKey, poolShort, type Matchup } from '../core/deckEval';
+import { makeHandSampler, priorReference } from '../core/handPrior';
+import { RULE_ID, RULE_NAMES, rulesFromIds } from '../core/rules';
 import type { CardDef, CardType, Sides } from '../core/types';
+import type { HandFill } from '../core/worlds';
 import achievementsJson from './achievements.json';
 import cardsJson from './cards.json';
+import competitionsJson from './competitions.json';
 import npcsJson from './npcs.json';
+import openTournamentsJson from './open-tournaments.json';
 import sourcesJson from './sources.json';
 
 /**
@@ -54,6 +60,24 @@ export type CollectionAchievement =
   | { id: number; name: string; count: number }
   | { id: number; name: string; from: number; to: number };
 
+/**
+ * 大会(ランキング形式)。名前はゲームデータ(TripleTriadCompetition)、固定ルールと入賞カードは攻略 wiki とプレイヤーの記録から
+ * (scripts/fetch-data.mjs の COMPETITION_FIXED)。ルールは対戦前に決まっているもので、ルーレットが 2 つの大会は [1, 1]
+ */
+export interface CompetitionInfo {
+  id: number;
+  name: string;
+  rules: number[];
+  /** 上位入賞で手に入るカードの ID */
+  reward: number;
+}
+
+/** オフィシャルトーナメント(8 人・ドラフト)のルールの組(ゲームデータ TripleTriadTournament の行)。必ずドラフト(15)を含む */
+export interface OpenRulesetInfo {
+  id: number;
+  rules: number[];
+}
+
 export interface AchievementStatus {
   achievement: CollectionAchievement;
   done: boolean;
@@ -66,6 +90,10 @@ export interface AchievementStatus {
 export const CARDS: readonly CardInfo[] = cardsJson as unknown as CardInfo[];
 export const ACHIEVEMENTS: readonly CollectionAchievement[] = achievementsJson as CollectionAchievement[];
 export const NPCS: readonly NpcInfo[] = npcsJson as unknown as NpcInfo[];
+export const COMPETITIONS: readonly CompetitionInfo[] = competitionsJson as CompetitionInfo[];
+export const OPEN_RULESETS: readonly OpenRulesetInfo[] = openTournamentsJson as OpenRulesetInfo[];
+/** カードバトルルームで大会対戦ができる NPC(場所で選ぶ。5 人) */
+export const BATTLEHALL_NPCS: readonly NpcInfo[] = NPCS.filter((n) => n.location === 'カードバトルルーム');
 export const CARD_SOURCES: ReadonlyMap<number, readonly CardSource[]> = new Map(
   (sourcesJson as { id: number; sources: CardSource[] }[]).map((x) => [x.id, x.sources]),
 );
@@ -134,6 +162,23 @@ export function toDeckCard(c: CardInfo): DeckCard {
 
 /** ゲーム内カードリストと同じ並び(No. 順、その後に Ex.) */
 export const CARDS_IN_LIST_ORDER: readonly CardInfo[] = [...CARDS].sort((a, b) => Number(a.ex) - Number(b.ex) || a.order - b.order);
+
+/** 同梱データの全カード(デッキ探索と、相手の手札の想定の母集団) */
+export const ALL_DECK_CARDS: readonly DeckCard[] = CARDS.map(toDeckCard);
+
+/**
+ * カード(数字とタイプ)に ID とレアリティを付ける。同梱データに無い(手入力の)カードは仮の負の ID とレアリティ 0。
+ * 同じ ID は 2 回使わない(数字もタイプも同じ別カードが 6 組あるため)
+ */
+export function toDeckCards(cards: readonly CardDef[]): DeckCard[] {
+  const used = new Set<number>();
+  return cards.map((c, i) => {
+    const id = resolveCardIds(c).find((x) => !used.has(x));
+    if (id === undefined) return { ...c, id: -(i + 1), stars: 0 };
+    used.add(id);
+    return { ...c, id, stars: byId.get(id)!.stars };
+  });
+}
 
 export function cardNumber(c: CardInfo): string {
   return `${c.ex ? 'Ex.' : 'No.'} ${c.order}`;
@@ -219,6 +264,63 @@ export function npcCards(npc: NpcInfo): { fixed: CardInfo[]; variable: CardInfo[
   return { fixed: get(npc.fixed), variable: get(npc.variable) };
 }
 
+export function competitionById(id: number | null): CompetitionInfo | undefined {
+  return id === null ? undefined : COMPETITIONS.find((t) => t.id === id);
+}
+
+export function openRulesetById(id: number | null): OpenRulesetInfo | undefined {
+  return id === null ? undefined : OPEN_RULESETS.find((r) => r.id === id);
+}
+
+/** ルールの組が同じ行はまとめる(ベーシック = ドラフトのみ の行は 5 つある)。並びは行の順 */
+export function distinctOpenRulesets(): OpenRulesetInfo[] {
+  const seen = new Set<string>();
+  return OPEN_RULESETS.filter((r) => {
+    const key = [...r.rules].sort((a, b) => a - b).join(',');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** 「ベーシック(ドラフトのみ)」/「アドバンス: セイム + スリーオープン」 */
+export function openRulesetLabel(r: OpenRulesetInfo): string {
+  const others = r.rules.filter((id) => id !== RULE_ID.draft);
+  return others.length === 0 ? 'ベーシック(ドラフトのみ)' : `アドバンス: ${others.map((id) => RULE_NAMES[id]).join(' + ')}`;
+}
+
+/**
+ * 対戦前に決まっているルール(ルーレットとスワップを含む。デッキの評価がルーレットの数とスワップの有無を読む)。
+ * 大会は大会の固定ルール(NPC 戦でも)、オフィシャルトーナメントは選んだ組、通常モードは NPC の固定ルール。どれも無ければ空
+ */
+export function preMatchRules(draft: SetupDraft): number[] {
+  if (draft.mode === 'tournament') return [...(competitionById(draft.tournamentId)?.rules ?? [])];
+  if (draft.mode === 'open') return [...(openRulesetById(draft.openRulesetId)?.rules ?? [RULE_ID.draft])];
+  const npc = draft.npcId === null ? undefined : npcById(draft.npcId);
+  return npc ? [...npc.rules] : [];
+}
+
+/**
+ * デッキの評価で、相手の候補が足りない分を想定(handPrior)で埋める準備。fill はシナリオの生成に、oppRef(代表カード)は候補の採点に使う。
+ * 代表カードは対戦条件のキーから決定的に引くので、同じ条件なら同じ結果になる。想定が要らない対戦条件はそのまま返す
+ */
+export function withPrior(base: Matchup): { matchup: Matchup; fill: HandFill | undefined } {
+  if (!base.oppPrior || !poolShort(base)) return { matchup: base, fill: undefined };
+  const sampler = makeHandSampler(base.oppPrior, ALL_DECK_CARDS, rulesFromIds(base.ruleIds));
+  const fill: HandFill = (rng, known, count) => sampler(rng, toDeckCards(known), count);
+  return { matchup: { ...base, oppRef: priorReference(sampler, matchupKey(base)) }, fill };
+}
+
+/** 対局画面の見出し(大会名など)。通常モードでは無し */
+export function matchTitle(draft: SetupDraft): string | null {
+  if (draft.mode === 'tournament') return `大会: ${competitionById(draft.tournamentId)?.name ?? '未選択'}`;
+  if (draft.mode === 'open') {
+    const r = openRulesetById(draft.openRulesetId);
+    return `オフィシャルトーナメント: ${r ? openRulesetLabel(r) : 'ドラフト'}`;
+  }
+  return null;
+}
+
 /**
  * 入力中の手札がデッキの制限に反していないか。同梱データに無い(手入力の)カードはレアリティが分からないので数えない。
  * 枚数は見ない(入力の途中でも使うため)。
@@ -241,28 +343,4 @@ export function handProblems(cards: readonly (CardDef | null)[]): DeckProblem[] 
   }
   const out = deckProblems(rated).filter((p) => p !== 'size' && p !== 'duplicate');
   return duplicate ? ['duplicate', ...out] : out;
-}
-
-/** 相手の候補が不明な時に、不明スロットを埋める実カードを引く。強さの想定は 3 段階 */
-export type PriorLevel = 1 | 2 | 3;
-
-const PRIOR_WEIGHTS: Record<PriorLevel, number[]> = {
-  // ★1〜★5 の重み
-  1: [4, 5, 3, 0.5, 0],
-  2: [0.5, 2, 6, 1.5, 0.7],
-  3: [0, 0.5, 5, 2.5, 2],
-};
-
-const byStars = [1, 2, 3, 4, 5].map((s) => CARDS.filter((c) => c.stars === s));
-
-export function samplePriorCard(rng: Rng, level: PriorLevel): CardDef {
-  const weights = PRIOR_WEIGHTS[level];
-  let x = rng() * weights.reduce((a, b) => a + b, 0);
-  let star = 0;
-  for (; star < 4; star++) {
-    x -= weights[star];
-    if (x < 0) break;
-  }
-  const list = byStars[star];
-  return toCardDef(list[Math.floor(rng() * list.length)]);
 }

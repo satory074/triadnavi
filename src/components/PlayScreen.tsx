@@ -11,7 +11,8 @@ import type { MoveEval } from '../core/scheduler';
 import { buildRematch, MAX_REMATCHES } from '../core/suddenDeath';
 import type { CardDef, Player, RuleSet } from '../core/types';
 import { makeChaosWorlds, makeWorlds, type World } from '../core/worlds';
-import { samplePriorCard, type PriorLevel } from '../data';
+import { makeHandSampler, priorKey, priorLabel, type HandPrior } from '../core/handPrior';
+import { ALL_DECK_CARDS, toDeckCards } from '../data';
 import { useSolver } from '../hooks/useSolver';
 import { BestMove, MoveTable } from './AnalysisPanel';
 import { Board } from './Board';
@@ -26,7 +27,10 @@ import { RuleNames } from './RuleNames';
 interface Props {
   setup: MatchSetup;
   events: MatchEvent[];
-  priorLevel: PriorLevel;
+  /** 相手の裏向きの手札の想定(候補が足りない分の埋め方)。下書きから決まり、対局中は変わらない */
+  prior: HandPrior;
+  /** 対戦の種類の見出し(大会名など)。無ければ出さない */
+  title?: string | null;
   saved: SavedData;
   onEvents: (next: MatchEvent[]) => void;
   onRematch: (next: MatchSetup) => void;
@@ -41,7 +45,7 @@ interface Props {
   onRules: (ruleIds: number[], fallenAceInCombo: boolean) => void;
 }
 
-export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRematch, onSetup, onSaved, onFirst, onRestart, onRules }: Props) {
+export function PlayScreen({ setup, events, prior, title, saved, onEvents, onRematch, onSetup, onSaved, onFirst, onRestart, onRules }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const [adhoc, setAdhoc] = useState<CardDef | null>(null);
   // 候補に無いカードを数字で入れる。reveal = 見えている相手のカードを開く、swap = スワップで来たカード、played = 相手が出したカード
@@ -67,6 +71,9 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   }, [myTurn, forcedMode, forcedCard, setup, view]);
 
   const key = position ? positionKey(position) : '';
+  const priorId = priorKey(prior);
+  // 候補が足りない分を埋めるカードの引き方。ルールが変わると「強さ」の並びが変わる(リバース)ので作り直す
+  const sampler = useMemo(() => makeHandSampler(prior, ALL_DECK_CARDS, setup.rules), [priorId, setup.rules]); // eslint-disable-line react-hooks/exhaustive-deps
   const worlds: World[] = useMemo(() => {
     if (!position) return [];
     const kind = guaranteeKind(position);
@@ -76,13 +83,13 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
       maxEnumerate: 30,
       // 序盤は 1 つの世界を解くのが重いので、サンプル数を抑える
       samples: placedCount(position) < 2 ? 8 : 24,
-      samplePrior: (r: () => number) => samplePriorCard(r, priorLevel),
+      fill: (r: () => number, known: readonly CardDef[], count: number) => sampler(r, toDeckCards(known), count),
     };
     if (kind === 'chaos') return chaosExactFeasible(position) ? [] : makeChaosWorlds(position, opt);
     return makeWorlds(position, opt);
     // position の中身は key に集約されている
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, priorLevel]);
+  }, [key, sampler]);
 
   const solver = useSolver(position, worlds);
 
@@ -260,6 +267,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
       {/* 1 行目: ルールと画面の移動。「設定を変える」は記録を閉じるので、対局中は 2 段階の確認にする */}
       <div className="match-bar">
         <div className="match-rules">
+          {title && <span className="chip chip-on">{title}</span>}
           {setup.round > 0 && <span className="chip chip-on">サドンデス 再戦 {setup.round} 回目</span>}
           <span className="match-rules-text">{ruleIds.length > 0 ? <RuleNames ids={ruleIds} /> : '追加ルールなし'}</span>
           <button type="button" className="btn-tertiary btn-sm" onClick={() => setRulesOpen(true)}>
@@ -330,7 +338,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
             ))}
           </div>
           {!view.finished && view.oppUnknown > 0 && (
-            <OppPool view={view} shiftOf={shiftOf} myTurn={myTurn} swapMode={swapMode} open={setup.rules.open}
+            <OppPool view={view} shiftOf={shiftOf} myTurn={myTurn} swapMode={swapMode} open={setup.rules.open} prior={prior}
               selected={swapMode ? swapIn?.index ?? null : selected}
               onPick={swapMode ? takeFromOpp : !myTurn ? pickPlayed : setup.rules.open !== 'none' ? revealFromPool : null}
               onUnlisted={() => setPicker(swapMode ? 'swap-editor' : !myTurn ? 'played-editor' : 'reveal-editor')} />
@@ -426,6 +434,7 @@ interface OppPoolProps {
   myTurn: boolean;
   swapMode: boolean;
   open: RuleSet['open'];
+  prior: HandPrior;
   selected: number | null;
   /** 候補をタップした時。null = 押せない(自分の番でオープンが無い時。見えないカードは開く理由が無く、押し間違いの元になる) */
   onPick: ((cardIndex: number) => void) | null;
@@ -439,12 +448,12 @@ interface OppPoolProps {
  * 手番のたびに盤面の位置が動かないよう、自分の番でも薄く出したままにし、案内は 1 行の見出しに収める。
  * 候補に無いカードのボタンは候補の列の最後のマスに置く(行を増やすと、スマホで盤面の下の段が画面から出る)
  */
-function OppPool({ view, shiftOf, myTurn, swapMode, open, selected, onPick, onUnlisted }: OppPoolProps) {
+function OppPool({ view, shiftOf, myTurn, swapMode, open, prior, selected, onPick, onUnlisted }: OppPoolProps) {
   const hasPool = view.oppPool.length > 0;
   const revealing = myTurn && !swapMode && open !== 'none';
   const head = revealing
     ? '見えているカードは、タップで相手の手札へ'
-    : hasPool ? `候補(裏向きの ${view.oppUnknown} 枚はこの中のどれか)` : `裏向き ${view.oppUnknown} 枚(候補が分かりません)`;
+    : hasPool ? `候補(裏向きの ${view.oppUnknown} 枚はこの中のどれか)` : `裏向き ${view.oppUnknown} 枚(${prior.kind === 'level' ? '候補が分かりません' : priorLabel(prior)})`;
   const unlisted = swapMode
     ? hasPool ? 'リストに無いカードが来た' : '来たカードを数字で入れる'
     : !myTurn

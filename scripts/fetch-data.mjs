@@ -1,10 +1,11 @@
 // カード/NPC データの更新スクリプト。`npm run data:update` で手動実行し、生成された JSON をコミットする。
-// CI では実行しない(第三者 API の停止でデプロイが壊れないようにするため)。1 回の更新は GET 5 回。
+// CI では実行しない(第三者 API の停止でデプロイが壊れないようにするため)。1 回の更新は GET 7 回。
 //
 // 取得元:
 //   FFXIV Collect  … カードの日本語名・四辺の数字・タイプ・レアリティ・ゲーム内リストの並び・入手方法、
 //                    NPC の日本語名・場所・座標、トライアドパックの中身と値段、カード収集のアチーブメント
-//   XIVAPI v2      … NPC のデッキ(固定/可変)・固定ルール・流行ルール適用フラグ(ゲームデータそのもの)
+//   XIVAPI v2      … NPC のデッキ(固定/可変)・固定ルール・流行ルール適用フラグ、大会(ランキング形式)の名前、
+//                    オフィシャルトーナメント(ドラフト)のルール(ゲームデータそのもの)
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 
 const CARDS_URL = 'https://ffxivcollect.com/api/triad/cards?language=ja';
@@ -14,6 +15,8 @@ const ACHIEVEMENTS_URL = 'https://ffxivcollect.com/api/achievements?language=ja'
 const DECKS_URL =
   'https://v2.xivapi.com/api/sheet/TripleTriad?limit=500&fields=' +
   'TripleTriadCardFixed@as(raw),TripleTriadCardVariable@as(raw),TripleTriadRule@as(raw),UsesRegionalRules';
+const COMPETITIONS_URL = 'https://v2.xivapi.com/api/sheet/TripleTriadCompetition?fields=Name&language=ja&limit=30';
+const OPEN_URL = 'https://v2.xivapi.com/api/sheet/TripleTriadTournament?fields=Unknown0,Unknown1,Unknown2,Unknown3&limit=20';
 
 async function getJson(url) {
   const res = await fetch(url, { headers: { 'user-agent': 'triadnavi data updater (github.com/satory074/triadnavi)' } });
@@ -23,8 +26,8 @@ async function getJson(url) {
 
 const nonZero = (xs) => xs.filter((x) => x > 0);
 
-const [cardsRaw, npcsRaw, decksRaw, packsRaw, achievementsRaw] = await Promise.all([
-  getJson(CARDS_URL), getJson(NPCS_URL), getJson(DECKS_URL), getJson(PACKS_URL), getJson(ACHIEVEMENTS_URL),
+const [cardsRaw, npcsRaw, decksRaw, packsRaw, achievementsRaw, competitionsRaw, openRaw] = await Promise.all([
+  getJson(CARDS_URL), getJson(NPCS_URL), getJson(DECKS_URL), getJson(PACKS_URL), getJson(ACHIEVEMENTS_URL), getJson(COMPETITIONS_URL), getJson(OPEN_URL),
 ]);
 
 const cards = cardsRaw.results
@@ -210,6 +213,45 @@ for (const r of byRange) {
 }
 const achievements = [...byCount, ...byRange];
 
+// ---- 大会(ランキング形式) ----
+// 名前はゲームデータ TripleTriadCompetition(行 1〜4。行 5〜 は同じ 4 種の繰り返し)。固定ルールと入賞カードはゲームデータの
+// シートに無いので、攻略 wiki(ffxiv.consolegameswiki.com "Triple Triad Tournaments")と日本のプレイヤーの対戦記録
+// (オーラン記念 = オーダー・セイム など)から手で持つ。ルール ID は TripleTriadRule の行 ID(src/core/rules.ts と同じ)
+const COMPETITION_FIXED = {
+  1: { rules: [2, 6], reward: 'ライトニング' }, // マンダヴィル・チャンピオンシップ: オールオープン + プラス
+  2: { rules: [3, 14], reward: 'セシル・ハーヴィ' }, // 星神ニメーヤ賞典: スリーオープン + スワップ
+  3: { rules: [8, 4], reward: 'フリオニール' }, // オーラン記念: オーダー + セイム
+  4: { rules: [1, 1], reward: 'ティーダ' }, // ロウェナ商会杯: ルーレット × 2
+};
+const competitionName = new Map(competitionsRaw.rows.map((r) => [r.row_id, r.fields?.Name ?? '']));
+const cardIdByName = new Map(cards.map((c) => [c.name, c.id]));
+const competitions = [];
+for (const [key, fixed] of Object.entries(COMPETITION_FIXED)) {
+  const id = Number(key);
+  const name = competitionName.get(id);
+  if (!name) throw new Error(`大会 ${id} の名前が TripleTriadCompetition にありません`);
+  if (competitionName.get(id + 4) !== name) throw new Error(`大会 ${id} ${name}: 行 ${id + 4} が同じ名前ではありません(4 種の繰り返しの前提が崩れています)`);
+  const reward = cardIdByName.get(fixed.reward);
+  if (reward === undefined) throw new Error(`大会 ${id} ${name} の入賞カード「${fixed.reward}」がカードにありません`);
+  competitions.push({ id, name, rules: fixed.rules, reward });
+}
+
+// ---- オフィシャルトーナメント(8 人・ドラフト) ----
+// ルールはゲームデータ TripleTriadTournament(行 1〜10。Unknown0〜3 がルール ID で、Unknown0 は常にドラフト(15))。
+// EXD のスキーマが更新されてフィールド名が変わると読めなくなる。その時は OPEN_URL とここのフィールド名を直す
+const OPEN_FIELDS = ['Unknown0', 'Unknown1', 'Unknown2', 'Unknown3'];
+const openTournaments = [];
+for (const r of openRaw.rows) {
+  if (r.row_id === 0) continue;
+  const f = r.fields ?? {};
+  for (const k of OPEN_FIELDS) if (!(k in f)) throw new Error(`TripleTriadTournament 行 ${r.row_id} に ${k} がありません(スキーマのフィールド名が変わった?)`);
+  const rules = nonZero(OPEN_FIELDS.map((k) => f[k]));
+  if (rules[0] !== 15) throw new Error(`TripleTriadTournament 行 ${r.row_id}: 先頭がドラフト(15)ではありません: ${JSON.stringify(rules)}`);
+  if (!rules.every((x) => Number.isInteger(x) && x >= 1 && x <= 15)) throw new Error(`TripleTriadTournament 行 ${r.row_id}: ルール ID が範囲外です: ${JSON.stringify(rules)}`);
+  openTournaments.push({ id: r.row_id, rules });
+}
+if (openTournaments.length < 10) throw new Error(`オフィシャルトーナメントのルールが ${openTournaments.length} 件しかありません(10 件の想定)`);
+
 await mkdir(new URL('../src/data/', import.meta.url), { recursive: true });
 // 1 行 1 件にして、更新時の差分を読みやすくする
 const lines = (rows) => '[\n' + rows.map((r) => '  ' + JSON.stringify(r)).join(',\n') + '\n]\n';
@@ -217,6 +259,11 @@ await writeFile(new URL('../src/data/cards.json', import.meta.url), lines(cards)
 await writeFile(new URL('../src/data/npcs.json', import.meta.url), lines(npcs));
 await writeFile(new URL('../src/data/sources.json', import.meta.url), lines(sources));
 await writeFile(new URL('../src/data/achievements.json', import.meta.url), lines(achievements));
+await writeFile(new URL('../src/data/competitions.json', import.meta.url), lines(competitions));
+await writeFile(new URL('../src/data/open-tournaments.json', import.meta.url), lines(openTournaments));
 
 for (const w of warnings) console.warn('警告:', w);
-console.log(`カード ${cards.length} 枚、NPC ${npcs.length} 人、入手方法 ${sources.reduce((n, x) => n + x.sources.length, 0)} 件、アチーブメント ${achievements.length} 件を書き出しました(警告 ${warnings.length} 件)`);
+console.log(
+  `カード ${cards.length} 枚、NPC ${npcs.length} 人、入手方法 ${sources.reduce((n, x) => n + x.sources.length, 0)} 件、アチーブメント ${achievements.length} 件、` +
+    `大会 ${competitions.length} 種、オフィシャルトーナメントのルール ${openTournaments.length} 件を書き出しました(警告 ${warnings.length} 件)`,
+);

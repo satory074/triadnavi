@@ -1,4 +1,5 @@
-import type { SetupDraft } from '../core/appState';
+import { handPriorOf, type SetupDraft } from '../core/appState';
+import { LEVEL_LABEL, type PriorLevel } from '../core/handPrior';
 import { CardView } from './CardView';
 
 interface Props {
@@ -9,19 +10,22 @@ interface Props {
   onReveal: (poolIndex: number) => void;
   onAddCandidate: () => void;
   onRemoveCandidate: (poolIndex: number) => void;
-  onPriorLevel: (level: 1 | 2 | 3) => void;
+  onPriorLevel: (level: PriorLevel) => void;
   onOrderKnown: (known: boolean) => void;
 }
 
-const LEVELS: { level: 1 | 2 | 3; label: string }[] = [
-  { level: 1, label: '弱め' },
-  { level: 2, label: '標準' },
-  { level: 3, label: '強い' },
-];
+const LEVELS: PriorLevel[] = [1, 2, 3];
+
+/** 大会・ドラフトの相手の想定の説明(3 段階の代わりに出す) */
+const PRIOR_NOTE = {
+  meta: '大会の相手はプレイヤーです。デッキの制限の中で強いカード(★5 1 枚 + ★4 1 枚 + 強い ★3)を使うと想定して推定します。',
+  draft: '相手もドラフトで組んだ手札(★1〜★5 が 1 枚ずつ)と想定して推定します。',
+};
 
 export function OpponentPanel({ draft, orderActive, onEditSlot, onClearSlot, onReveal, onAddCandidate, onRemoveCandidate, onPriorLevel, onOrderKnown }: Props) {
   const unknown = draft.oppCards.filter((c) => c === null).length;
   const hasNpc = draft.npcId !== null;
+  const prior = handPriorOf(draft);
 
   return (
     <div className="opp-panel">
@@ -62,18 +66,20 @@ export function OpponentPanel({ draft, orderActive, onEditSlot, onClearSlot, onR
           )}
           <button type="button" className="btn btn-sm" onClick={onAddCandidate}>候補を追加</button>
 
-          {draft.oppPool.length < unknown && (
+          {draft.oppPool.length < unknown && (prior.kind === 'level' ? (
             <div className="prior">
               <span>候補が足りない分は、相手の強さを想定して推定します</span>
               <div className="segmented" role="group" aria-label="相手の強さの想定">
-                {LEVELS.map((l) => (
-                  <button type="button" key={l.level} className={draft.priorLevel === l.level ? 'seg-on' : ''} aria-pressed={draft.priorLevel === l.level} onClick={() => onPriorLevel(l.level)}>
-                    {l.label}
+                {LEVELS.map((level) => (
+                  <button type="button" key={level} className={draft.priorLevel === level ? 'seg-on' : ''} aria-pressed={draft.priorLevel === level} onClick={() => onPriorLevel(level)}>
+                    {LEVEL_LABEL[level]}
                   </button>
                 ))}
               </div>
             </div>
-          )}
+          ) : (
+            <p className="note">{PRIOR_NOTE[prior.kind]}</p>
+          ))}
         </div>
       )}
 

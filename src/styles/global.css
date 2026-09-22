@@ -519,6 +519,35 @@ input:not([type]) {
   background: var(--mat-700);
 }
 
+/* 選択中の行(大会・バトルルームの NPC)。おすすめ・選択中は金 */
+.result-list button[aria-pressed='true'] {
+  box-shadow: inset 4px 0 0 var(--gilt);
+  background: var(--mat-700);
+}
+
+.result-note {
+  align-self: center;
+  color: var(--paper-dim);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.tournament-picker .result-list {
+  max-height: none;
+}
+
+.tournament-opp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.8rem;
+  margin-top: 0.8rem;
+}
+
+.tournament-opp .field-label {
+  margin: 0;
+}
+
 .result-name {
   font-weight: 700;
 }

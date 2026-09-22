@@ -83,9 +83,16 @@ function comboPotential(card: CardDef, opp: readonly CardDef[], rules: RuleSet):
   return total;
 }
 
+/** 相手のカード。分かっているものが無ければ、想定から引いた代表カード(m.oppRef)、それも無ければ一様 */
 function opponentCards(m: Matchup): readonly CardDef[] {
   const all = [...m.oppKnown, ...m.oppPool];
-  return all.length > 0 ? all : UNIFORM;
+  if (all.length > 0) return all;
+  return m.oppRef && m.oppRef.length > 0 ? m.oppRef : UNIFORM;
+}
+
+/** 相手のカードを知らない時のカードの強さ(1〜A が均等に出ると見なす)。相手の手札の想定(handPrior)がこれで段の中を並べる */
+export function staticStrength(card: CardDef, rules: RuleSet): number {
+  return scoreUnder(card, UNIFORM, rules);
 }
 
 /** ルーレットがある時は、起こりうるルールごとの点を確率で平均する */
@@ -94,7 +101,7 @@ export function cardScore(card: CardDef, m: Matchup): number {
   return ruleVariants(m).reduce((a, v) => a + v.share * scoreUnder(card, opp, v.rules), 0);
 }
 
-function cardPotential(card: CardDef, m: Matchup): number {
+export function cardPotential(card: CardDef, m: Matchup): number {
   const opp = opponentCards(m);
   return ruleVariants(m).reduce((a, v) => a + v.share * comboPotential(card, opp, v.rules), 0);
 }

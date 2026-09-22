@@ -3,8 +3,9 @@ import { toFastBoard, type Position } from './position';
 import type { Rng } from './rng';
 import { RULE_ID, RULE_NAMES, rulesFromIds } from './rules';
 import { exactMove, myValueAtLeast, negamax, probeMove } from './search';
+import type { HandPrior } from './handPrior';
 import type { CardDef, EngineOptions, Player, RuleSet } from './types';
-import { combinations, countCombinations, shuffled } from './worlds';
+import { combinations, countCombinations, shuffled, type HandFill } from './worlds';
 
 /**
  * デッキの評価。「対戦が始まった時に起こりうる状況」(シナリオ)を、デッキに依らない 1 つのリストとして先に作り、
@@ -29,13 +30,22 @@ export interface Matchup {
   /** ルーレットの数(0〜2)。対戦が始まってからルールが加わる */
   roulette: number;
   swap: boolean;
+  /** 候補が足りない分の埋め方(handPrior.ts)。無ければ候補が足りない時は評価できない */
+  oppPrior?: HandPrior;
+  /** 相手のカードが分からない時に静的な採点の相手にする代表カード(想定から引いたもの。prior から決定的に決まるのでキーには入れない) */
+  oppRef?: CardDef[];
 }
 
-/** oppUnknown: 相手の候補カードが足りず、具体的な手札を並べられない */
+/** oppUnknown: 相手の候補カードが足りず、想定も無いので、具体的な手札を並べられない */
 export type MatchupProblem = 'oppUnknown';
 
+/** 候補だけでは相手の手札を並べられない(想定で埋める必要がある) */
+export function poolShort(m: Matchup): boolean {
+  return m.oppUnknown > 0 && m.oppPool.length < m.oppUnknown;
+}
+
 export function matchupProblems(m: Matchup): MatchupProblem[] {
-  return m.oppUnknown > 0 && m.oppPool.length < m.oppUnknown ? ['oppUnknown'] : [];
+  return poolShort(m) && !m.oppPrior ? ['oppUnknown'] : [];
 }
 
 const cardKey = (c: CardDef) => `${c.sides.join('.')}t${c.type}`;
@@ -43,7 +53,7 @@ const cardKey = (c: CardDef) => `${c.sides.join('.')}t${c.type}`;
 export function matchupKey(m: Matchup): string {
   return [
     m.ruleIds.join(','), JSON.stringify(m.options), m.oppKnown.map(cardKey).join(','), m.oppPool.map(cardKey).join(','),
-    m.oppUnknown, m.roulette, m.swap ? 1 : 0,
+    m.oppUnknown, m.roulette, m.swap ? 1 : 0, JSON.stringify(m.oppPrior ?? null),
   ].join('|');
 }
 
@@ -135,6 +145,8 @@ export interface ScenarioOptions {
   maxScenarios: number;
   /** 相手の具体的な手札を全列挙する上限 */
   maxHands: number;
+  /** 候補が足りない分を想定から引く関数(m.oppPrior がある時は必須) */
+  fill?: HandFill;
 }
 
 const SLOTS = [0, 1, 2, 3, 4];
@@ -156,9 +168,10 @@ export function scenarioBudget(m: Matchup): { search: number; refine: number } {
 export function makeScenarios(m: Matchup, opt: ScenarioOptions): ScenarioSet {
   const variants = ruleVariants(m);
   if (matchupProblems(m).length > 0) return { variants, scenarios: [], enumerated: false, handCount: 0 };
+  if (poolShort(m) && !opt.fill) throw new Error('相手の候補が足りないのに、想定から引く関数(fill)がありません');
 
   const q = m.oppUnknown;
-  const handsEnumerable = q === 0 || countCombinations(m.oppPool.length, q) <= opt.maxHands;
+  const handsEnumerable = q === 0 || (!poolShort(m) && countCombinations(m.oppPool.length, q) <= opt.maxHands);
   const hands: CardDef[][] = q === 0 ? [m.oppKnown] : handsEnumerable ? combinations(m.oppPool, q).map((c) => [...m.oppKnown, ...c]) : [];
   const sizeOf = (v: RuleVariant) => {
     if (v.rules.pick === 'chaos' || !handsEnumerable) return Infinity;
@@ -184,8 +197,14 @@ export function makeScenarios(m: Matchup, opt: ScenarioOptions): ScenarioSet {
       return;
     }
     const pick = <T>(xs: readonly T[]): T => xs[Math.floor(opt.rng() * xs.length)];
+    // 候補が足りない時は、候補を優先して使い、残りを想定から引く(worlds.ts の makeWorlds と同じ)
+    const sampleHand = (): CardDef[] => {
+      const fromPool = shuffled(m.oppPool, opt.rng).slice(0, q);
+      const rest = fromPool.length < q ? opt.fill!(opt.rng, [...m.oppKnown, ...fromPool], q - fromPool.length) : [];
+      return [...m.oppKnown, ...fromPool, ...rest];
+    };
     for (let i = 0; i < quota; i++) {
-      const hand = handsEnumerable ? pick(hands) : [...m.oppKnown, ...shuffled(m.oppPool, opt.rng).slice(0, q)];
+      const hand = handsEnumerable ? pick(hands) : sampleHand();
       scenarios.push({
         variant: vi,
         oppHand: v.rules.pick === 'free' ? hand : shuffled(hand, opt.rng),
@@ -211,6 +230,8 @@ export function deckEvalKind(m: Matchup, set: ScenarioSet): DeckEvalKind {
   const base = rulesFromIds(m.ruleIds);
   if (base.pick === 'chaos') return 'chaos';
   if (set.variants.some((v) => v.rules.pick === 'chaos')) return 'estimate';
+  // 想定から引いた手札は、オールオープンでも「相手のデッキがその分布から来る」という仮定の上の目安
+  if (poolShort(m)) return 'estimate';
   return m.oppUnknown === 0 || base.open === 'all' ? 'exact' : 'estimate';
 }
 
@@ -262,10 +283,10 @@ export function supersetPosition(m: Matchup, deck: readonly CardDef[], first: Pl
   };
 }
 
-/** 上位集合で保証を調べられるか。ルーレット・スワップ・カオスでは対戦前に局面が決まらないので調べない */
+/** 上位集合で保証を調べられるか。ルーレット・スワップ・カオスでは対戦前に局面が決まらず、候補が足りない(想定で埋める)時は保証にならないので調べない */
 export function supersetApplicable(m: Matchup): boolean {
   if (m.roulette > 0 || m.swap || m.oppUnknown === 0 || rulesFromIds(m.ruleIds).pick === 'chaos') return false;
-  return matchupProblems(m).length === 0;
+  return !poolShort(m);
 }
 
 /** 空の盤面から、自分の保証値が threshold 以上か。自分が先攻の時は、静的に有望な初手から順に探る */

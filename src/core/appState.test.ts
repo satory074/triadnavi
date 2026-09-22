@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  EMPTY_DRAFT, INITIAL_STATE, applyNpc, changeRules, clearOppSlot, draftToSetup, parseAppState, restartMatch, revealPoolCard, setupWarnings, toTop, toggleRule,
-  type AppState,
+  EMPTY_DRAFT, INITIAL_STATE, applyNpc, applyOpenRuleset, applyTournament, changeRules, clearNpc, clearOppSlot, draftToSetup, handPriorOf, matchupFromDraft, parseAppState, restartMatch,
+  revealPoolCard, setMode, setupWarnings, toTop, toggleRule, type AppState,
 } from './appState';
 import { replay } from './match';
 import { RULE_HELP, RULE_NAMES } from './rules';
@@ -35,6 +35,33 @@ describe('NPC の適用', () => {
     expect(d.ruleIds).toEqual([2, 4]);
   });
 
+  it('大会モードでは NPC を選んでも外しても、ルールは大会のまま', () => {
+    const t = applyTournament(EMPTY_DRAFT, { id: 3, rules: [8, 4] });
+    expect(t).toMatchObject({ mode: 'tournament', tournamentId: 3, ruleIds: [8, 4] });
+    const d = applyNpc(t, npc, []);
+    expect(d.ruleIds).toEqual([8, 4]);
+    expect(d.oppCards).toEqual([c(1), c(2), c(3), null, null]);
+    expect(clearNpc(d).ruleIds).toEqual([8, 4]);
+    expect(clearNpc(d).npcId).toBeNull();
+    // ルーレットが 2 つの大会はチップに出るルールが無い(対戦が始まってから入れる)。評価ではルーレット 2 つとして数える
+    const r = applyTournament(EMPTY_DRAFT, { id: 4, rules: [1, 1] });
+    expect(r.ruleIds).toEqual([]);
+    expect(matchupFromDraft(r, [1, 1])).toMatchObject({ roulette: 2, swap: false, oppPrior: { kind: 'meta' } });
+  });
+
+  it('対戦の種類ごとの相手の想定: 大会のプレイヤーは強いデッキ、大会の NPC と通常は 3 段階、ドラフトはドラフトの手札', () => {
+    const t = applyTournament(EMPTY_DRAFT, { id: 1, rules: [2, 6] });
+    expect(handPriorOf(t)).toEqual({ kind: 'meta' });
+    expect(handPriorOf(applyNpc(t, npc, []))).toEqual({ kind: 'level', level: 2 });
+    expect(handPriorOf({ ...EMPTY_DRAFT, priorLevel: 3 })).toEqual({ kind: 'level', level: 3 });
+    const o = applyOpenRuleset(applyNpc(t, npc, []), { id: 10, rules: [15, 6, 14] });
+    expect(o).toMatchObject({ mode: 'open', openRulesetId: 10, tournamentId: null, npcId: null, ruleIds: [6], oppPool: [] });
+    expect(handPriorOf(o)).toEqual({ kind: 'draft' });
+    expect(matchupFromDraft(o, [15, 6, 14])).toMatchObject({ swap: true, roulette: 0, oppPrior: { kind: 'draft' } });
+    // 通常に戻すと大会の選択は忘れるが、ルールは残す
+    expect(setMode(t, 'free')).toMatchObject({ mode: 'free', tournamentId: null, ruleIds: [2, 6] });
+  });
+
   it('見えている候補を手札へ移し、外すと候補へ戻る', () => {
     const d = revealPoolCard(applyNpc(EMPTY_DRAFT, npc, []), 1);
     expect(d.oppCards).toEqual([c(1), c(2), c(3), c(5), null]);
@@ -66,7 +93,7 @@ describe('対戦の開始', () => {
 
 describe('保存と復元', () => {
   it('対局中の状態を往復できる', () => {
-    const draft = { ...EMPTY_DRAFT, myCards: [c(1), c(2), c(3), c(4), c(5)], oppCards: [c(6), c(7), null, null, null], oppPool: [c(8), c(9), c(10)], ruleIds: [4, 6] };
+    const draft = { ...EMPTY_DRAFT, mode: 'tournament' as const, tournamentId: 3, myCards: [c(1), c(2), c(3), c(4), c(5)], oppCards: [c(6), c(7), null, null, null], oppPool: [c(8), c(9), c(10)], ruleIds: [4, 6] };
     const setup = draftToSetup(draft)!;
     const state: AppState = { phase: 'play', draft, setup, events: [{ t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 }] };
     const back = parseAppState(JSON.stringify(state));
@@ -86,10 +113,12 @@ describe('保存と復元', () => {
   it('壊れたデータは初期状態に戻す(下書きが読めればそれは残す)', () => {
     expect(parseAppState(null)).toEqual(INITIAL_STATE);
     expect(parseAppState('not json')).toEqual(INITIAL_STATE);
-    const partial = parseAppState(JSON.stringify({ phase: 'play', draft: { myCards: [c(1)] }, setup: { myHand: [] } }));
+    const partial = parseAppState(JSON.stringify({ phase: 'play', draft: { myCards: [c(1)], mode: 'nope', tournamentId: 'x' }, setup: { myHand: [] } }));
     expect(partial.phase).toBe('setup');
     expect(partial.draft.myCards[0]).toEqual(c(1));
     expect(partial.draft.myCards[1]).toBeNull();
+    // 大会の項目が無い/壊れている古い保存は通常モードとして読む
+    expect(partial.draft).toMatchObject({ mode: 'free', tournamentId: null, openRulesetId: null });
   });
 });
 

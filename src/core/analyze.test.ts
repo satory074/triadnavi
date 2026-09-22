@@ -65,7 +65,7 @@ const worldOpts = (seed: number): WorldOptions => ({
   rng: makeRng(seed),
   maxEnumerate: 30,
   samples: 6,
-  samplePrior: (r) => randomCard(r, [3, 4, 5, 6, 7, 8]),
+  fill: (r, _known, count) => Array.from({ length: count }, () => randomCard(r, [3, 4, 5, 6, 7, 8])),
 });
 
 describe('完全情報の解析', () => {

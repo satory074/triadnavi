@@ -1,9 +1,9 @@
 import { useMemo, useState, type MouseEvent } from 'react';
-import { changeRules, draftToSetup, parseAppState, restartMatch, toTop, type AppState } from './core/appState';
+import { changeRules, draftToSetup, handPriorOf, parseAppState, restartMatch, toTop, type AppState } from './core/appState';
 import { parseCollection } from './core/collection';
 import { parsePrefs } from './core/prefs';
 import { parseSaved } from './core/presets';
-import { ownedCards } from './data';
+import { matchTitle, ownedCards } from './data';
 import { CollectionScreen } from './components/CollectionScreen';
 import { HelpModal } from './components/HelpModal';
 import { PlayScreen } from './components/PlayScreen';
@@ -64,7 +64,8 @@ export default function App() {
         <PlayScreen
           setup={app.setup}
           events={app.events}
-          priorLevel={app.draft.priorLevel}
+          prior={handPriorOf(app.draft)}
+          title={matchTitle(app.draft)}
           saved={saved}
           onEvents={(events) => setApp((s) => ({ ...s, events }))}
           onRematch={(setup) => {

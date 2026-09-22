@@ -1,14 +1,16 @@
-import { variantLabel, type DeckEvalKind, type Matchup, type ScenarioSet } from './deckEval';
+import { poolShort, variantLabel, type DeckEvalKind, type Matchup, type ScenarioSet } from './deckEval';
 import { deckScore, isComplete, type DeckEval, type DeckSearch, type StopReason } from './deckSearch';
+import { DRAFT_CHOICES, META_TOP, type HandPrior } from './handPrior';
 import { percent } from './rank';
 
 /** デッキの評価と提案の、日本語の表示。「確定」「保証」「推定」の言葉の使い分けは core/rank.ts と揃える */
 
 export const DECK_KIND_LABEL: Record<DeckEvalKind, string> = { exact: '確定', estimate: '推定', chaos: 'カオス: 推定' };
 
-export function deckKindNote(kind: DeckEvalKind): string {
+export function deckKindNote(kind: DeckEvalKind, prior?: HandPrior): string {
   if (kind === 'exact') return '対戦が始まった時に見えている情報だけで、最後まで読み切った結果です。';
   if (kind === 'chaos') return 'カオスでは出るカードが毎回ランダムに決まります。出る順を何通りも想定して解いた目安で、結果を保証するものではありません。';
+  if (prior) return '相手のデッキは分からないので、想定した分布から引いた手札を知っている前提で解いた、楽観側の目安です。';
   return '相手の裏向きの手札(や並び順)を知っている前提で解いた、楽観側の目安です。';
 }
 
@@ -17,7 +19,7 @@ export function scenarioSummary(m: Matchup, set: ScenarioSet): string {
   const n = set.scenarios.length;
   const parts: string[] = [];
   if (set.variants.length > 1) parts.push('ルーレットの結果');
-  parts.push(set.handCount > 1 ? `相手の手札 ${set.handCount} 通り` : m.oppUnknown > 0 && set.handCount === 0 ? '相手の手札' : '');
+  parts.push(set.handCount > 1 ? `相手の手札 ${set.handCount} 通り` : m.oppUnknown > 0 && set.handCount === 0 ? (poolShort(m) ? '相手の手札(想定から引いたもの)' : '相手の手札') : '');
   parts.push('先攻/後攻');
   if (set.variants.some((v) => v.swap)) parts.push('スワップで交換されるカード');
   if (set.variants.some((v) => v.rules.pick === 'order')) parts.push('相手の並び順');
@@ -97,15 +99,25 @@ export function stopReasonText(reason: StopReason | undefined): string {
   }
 }
 
-/** 評価に反映していない/仮定していることの注意書き */
-export function matchupCautions(m: Matchup, usesRegional: boolean): string[] {
+/** 評価に反映していない/仮定していることの注意書き。opponent は相手が NPC かプレイヤーか */
+export function matchupCautions(m: Matchup, usesRegional: boolean, opponent: 'npc' | 'player' = 'npc'): string[] {
   const out: string[] = [];
+  if (poolShort(m) && m.oppPrior) out.push(priorCaution(m.oppPrior));
   if (m.roulette > 0) {
     out.push('ルーレット: 加わるルールはどれも同じ確率で出ると仮定して平均しています(実機で未確認)。ランダムハンドの回はデッキが関係しないので外しています。');
   }
   if (m.swap) out.push('スワップ: 交換されるカードは、双方の 5 枚から同じ確率で選ばれると仮定しています。');
   if (usesRegional) out.push('流行ルールが適用される NPC です。今日の流行ルールを「この対戦のルール」に入れてから評価してください(ランダムハンドやドラフトの日はデッキが関係しません)。');
-  out.push('NPC は最善手を打つとは限らないので、実戦の結果はここでの数字より良くなることが多いはずです。');
+  if (opponent === 'npc') out.push('NPC は最善手を打つとは限らないので、実戦の結果はここでの数字より良くなることが多いはずです。');
   out.push('サドンデスの再戦は含めていません(引き分けは引き分けのまま数えます)。');
   return out;
+}
+
+/** 相手の手札の想定(handPrior)の仮定 */
+export function priorCaution(p: HandPrior): string {
+  if (p.kind === 'meta') {
+    return `相手のデッキは、★5 1 枚 + ★4 1 枚 + ★3 以下 3 枚を、このルールで強い順に ★5 ${META_TOP.five} 枚・★4 ${META_TOP.four} 枚・★3 以下 ${META_TOP.low} 枚の中から選んだものと仮定しています。`;
+  }
+  if (p.kind === 'draft') return `相手の手札は ★1〜★5 が 1 枚ずつで、各レアリティで ${DRAFT_CHOICES} 枚のうち最も強いカードを選んだものと仮定しています(提示のされ方は実機で未確認)。`;
+  return `相手の手札は「${['弱め', '標準', '強い'][p.level - 1]}」の想定で、レアリティの分布からカードごとに引いています。`;
 }

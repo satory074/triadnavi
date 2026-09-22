@@ -39,14 +39,16 @@ export function shuffled<T>(xs: readonly T[], rng: Rng): T[] {
   return a;
 }
 
+/** 候補リストが無い/足りない時に、不明スロットを埋めるカードを count 枚引く関数(known = 既に決まっている相手のカード)。handPrior.ts が作る */
+export type HandFill = (rng: Rng, known: readonly CardDef[], count: number) => CardDef[];
+
 export interface WorldOptions {
   rng: Rng;
   /** 全列挙する上限。これを超えたらサンプリングする */
   maxEnumerate: number;
   /** サンプリングする世界の数 */
   samples: number;
-  /** 候補リストが無い/足りない時に、不明スロットを埋めるカードを引く関数 */
-  samplePrior: (rng: Rng) => CardDef;
+  fill: HandFill;
 }
 
 /** 相手の不明スロットの埋め方を列挙またはサンプリングする(カオス以外) */
@@ -65,10 +67,10 @@ export function makeWorlds(pos: Position, opt: WorldOptions): World[] {
       enumerated: false,
     }));
   }
-  // 候補が足りない: 候補を優先して使い、残りは事前分布から引く
+  // 候補が足りない: 候補を優先して使い、残りは想定(handPrior)から引く
   return Array.from({ length: opt.samples }, () => {
     const fromPool = shuffled(pool, opt.rng);
-    const rest = Array.from({ length: q - fromPool.length }, () => opt.samplePrior(opt.rng));
+    const rest = opt.fill(opt.rng, [...known, ...fromPool], q - fromPool.length);
     return { oppHand: [...known, ...fromPool, ...rest], enumerated: false };
   });
 }

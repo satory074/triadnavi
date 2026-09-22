@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import {
-  applyNpc, clearNpc, clearOppSlot, revealPoolCard, setupProblems, setupWarnings, toggleRule, type SetupDraft,
+  applyNpc, applyTournament, clearNpc, clearOppSlot, revealPoolCard, selectableRules, setMode, setupProblems, setupWarnings, toggleRule, type MatchMode, type SetupDraft,
 } from '../core/appState';
 import { DECK_PROBLEM_TEXT, type Collection } from '../core/collection';
 import type { SavedData, SavedDeck } from '../core/presets';
 import { renameDeck, sameCard } from '../core/presets';
-import { rulesFromIds } from '../core/rules';
+import { RULE_ID, rulesFromIds } from '../core/rules';
 import type { CardDef } from '../core/types';
-import { handProblems, npcById, npcCards, toCardDef, type NpcInfo } from '../data';
+import { competitionById, handProblems, npcById, npcCards, toCardDef, type NpcInfo } from '../data';
 import { CardEditor } from './CardEditor';
 import { CardView } from './CardView';
 import { DeckAdvisor } from './DeckAdvisor';
@@ -15,6 +15,8 @@ import { DeckPicker } from './DeckPicker';
 import { NpcPicker } from './NpcPicker';
 import { OpponentPanel } from './OpponentPanel';
 import { RuleChips } from './RuleChips';
+import { RuleNames } from './RuleNames';
+import { TournamentPicker } from './TournamentPicker';
 
 interface Props {
   draft: SetupDraft;
@@ -28,12 +30,21 @@ interface Props {
 
 type Target = { kind: 'my'; slot: number } | { kind: 'opp'; slot: number } | { kind: 'pool' };
 
+const MODES: { mode: MatchMode; label: string }[] = [
+  { mode: 'free', label: '通常' },
+  { mode: 'tournament', label: '大会' },
+];
+
 export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStart, onOpenCollection }: Props) {
   const [target, setTarget] = useState<Target | null>(null);
   const rules = rulesFromIds(draft.ruleIds);
   const typeMatters = rules.typeShift !== 'none';
   const problems = setupProblems(draft);
   const warnings = setupWarnings(draft);
+  const competition = draft.mode === 'tournament' ? competitionById(draft.tournamentId) : undefined;
+  // 大会の固定ルールと違うチップが選ばれている(ルーレットの大会は、対戦が始まってから結果を足すので除く)
+  const ruleDrift = competition !== undefined && !competition.rules.includes(RULE_ID.roulette)
+    && JSON.stringify([...draft.ruleIds].sort((a, b) => a - b)) !== JSON.stringify(selectableRules(competition.rules).sort((a, b) => a - b));
 
   const pickNpc = (npc: NpcInfo) => {
     const { fixed, variable } = npcCards(npc);
@@ -87,8 +98,26 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
   return (
     <main className="setup">
       <section>
-        <h2>対戦相手</h2>
-        <NpcPicker npcId={draft.npcId} onPick={pickNpc} onClear={() => onDraft(clearNpc(draft))} />
+        <h2>対戦の種類</h2>
+        <div className="segmented" role="group" aria-label="対戦の種類">
+          {MODES.map((m) => (
+            <button type="button" key={m.mode} className={draft.mode === m.mode ? 'seg-on' : ''} aria-pressed={draft.mode === m.mode} onClick={() => onDraft(setMode(draft, m.mode))}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {draft.mode === 'tournament' && (
+          <p className="note">ゴールドソーサーの大会(ランキング形式)。ルールは大会ごとに固定で、流行ルールは適用されません。相手はオートマッチングのプレイヤーか、カードバトルルームの NPC です。</p>
+        )}
+      </section>
+
+      <section>
+        <h2>{draft.mode === 'tournament' ? '大会と相手' : '対戦相手'}</h2>
+        {draft.mode === 'tournament' ? (
+          <TournamentPicker draft={draft} onPick={(t) => onDraft(applyTournament(draft, t))} onNpc={pickNpc} onPlayer={() => onDraft(clearNpc(draft))} />
+        ) : (
+          <NpcPicker npcId={draft.npcId} onPick={pickNpc} onClear={() => onDraft(clearNpc(draft))} />
+        )}
       </section>
 
       <section>
@@ -108,6 +137,18 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
 
       <section>
         <h2>この対戦のルール</h2>
+        {competition && (
+          <p className="note">
+            {competition.name} の固定ルール: <RuleNames ids={competition.rules} />
+            {ruleDrift && (
+              <>
+                {' '}
+                <span className="note-warn">固定ルールと違うルールが選ばれています。</span>
+                <button type="button" className="btn-tertiary btn-sm" onClick={() => onDraft(applyTournament(draft, competition))}>大会のルールに戻す</button>
+              </>
+            )}
+          </p>
+        )}
         <RuleChips ruleIds={draft.ruleIds} onToggle={(id) => onDraft({ ...draft, ruleIds: toggleRule(draft.ruleIds, id) })} />
         {rules.fallenAce && (rules.same || rules.plus) && (
           <label className="check">

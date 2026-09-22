@@ -47,7 +47,7 @@ export function NpcPicker({ npcId, onPick, onClear }: Props) {
             </button>
           </li>
         ))}
-        {results.length === 0 && <li className="muted result-empty">見つかりません。対人戦などは、選ばずにそのまま進めます。</li>}
+        {results.length === 0 && <li className="muted result-empty">見つかりません。対人戦などは、選ばずにそのまま進めます(大会は上の「対戦の種類」から)。</li>}
       </ul>
     </div>
   );

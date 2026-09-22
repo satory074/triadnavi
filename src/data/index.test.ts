@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { makeRng } from '../core/rng';
 import {
   ACHIEVEMENTS, CARDS, CARDS_IN_LIST_ORDER, CARD_SOURCES, NPCS, achievementStatus, artIdOf, cardArtUrl, cardNumber, cardSources, findBySides, handProblems, normalize, npcCards, ownedCards, ownershipPercent, resolveCardIds,
-  resolveDeck, samplePriorCard, searchCards, searchNpcs, toCardDef, typeFromSides,
+  resolveDeck, searchCards, searchNpcs, toCardDef, toDeckCards, typeFromSides,
+  BATTLEHALL_NPCS, COMPETITIONS, OPEN_RULESETS, cardById, distinctOpenRulesets, openRulesetLabel,
 } from './index';
 
 describe('同梱データの整合性', () => {
@@ -163,16 +163,37 @@ describe('検索', () => {
   });
 });
 
-describe('事前分布', () => {
-  it('強さの想定が高いほど、平均の辺の値が大きい', () => {
-    const mean = (level: 1 | 2 | 3) => {
-      const r = makeRng(level);
-      let sum = 0;
-      for (let i = 0; i < 2000; i++) sum += samplePriorCard(r, level).sides.reduce((a, b) => a + b, 0);
-      return sum / 2000;
-    };
-    expect(mean(1)).toBeLessThan(mean(2));
-    expect(mean(2)).toBeLessThan(mean(3));
+describe('大会のデータ', () => {
+  it('大会は 4 種。固定ルールの ID が範囲内で、入賞カードが同梱データにあり、バトルルームの NPC は 5 人', () => {
+    expect(COMPETITIONS.map((t) => t.id)).toEqual([1, 2, 3, 4]);
+    for (const t of COMPETITIONS) {
+      expect(t.name.length).toBeGreaterThan(0);
+      expect(t.rules.every((id) => Number.isInteger(id) && id >= 1 && id <= 15)).toBe(true);
+      expect(cardById(t.reward)).toBeDefined();
+    }
+    expect(BATTLEHALL_NPCS.length).toBe(5);
+  });
+
+  it('オフィシャルトーナメントのルールは 10 件。全てドラフトで始まり、排他のルールを同時に含まず、まとめると 6 種', () => {
+    expect(OPEN_RULESETS.length).toBe(10);
+    for (const r of OPEN_RULESETS) {
+      expect(r.rules[0]).toBe(15);
+      for (const [a, b] of [[2, 3], [8, 9], [12, 13]]) expect(r.rules.includes(a) && r.rules.includes(b)).toBe(false);
+    }
+    const distinct = distinctOpenRulesets();
+    expect(distinct.length).toBe(6);
+    expect(openRulesetLabel(distinct[0])).toBe('ベーシック(ドラフトのみ)');
+    expect(openRulesetLabel(distinct[1])).toMatch(/^アドバンス: /);
+  });
+});
+
+describe('カードに ID とレアリティを付ける', () => {
+  it('同梱データのカードは ID とレアリティが付き、同じ ID は 2 回使わない。無いカードは負の仮 ID', () => {
+    const ifrit = CARDS.find((c) => c.name === 'イフリート')!;
+    const cards = toDeckCards([toCardDef(ifrit), toCardDef(ifrit), { sides: [10, 10, 10, 10], type: 0 }]);
+    expect(cards[0]).toMatchObject({ id: ifrit.id, stars: ifrit.stars });
+    expect(cards[1].id).not.toBe(ifrit.id);
+    expect(cards[2]).toMatchObject({ id: -3, stars: 0 });
   });
 });
 
