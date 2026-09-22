@@ -617,6 +617,8 @@ export interface PrepareInput {
   pool?: PoolOptions;
   /** 相手の候補が足りない分を想定から引く関数(matchup.oppPrior がある時は必須。handPrior.ts の makeHandSampler) */
   fill?: HandFill;
+  /** false なら、上位のデッキをより大きいシナリオで測り直す段階(refine)を省く(ドラフトの 3 通りの比較など、速さを優先する時) */
+  refine?: boolean;
 }
 
 export interface PreparedSearch {
@@ -637,7 +639,7 @@ export function prepareDeckSearch(input: PrepareInput): PreparedSearch {
   const key = matchupKey(m);
   const budget = scenarioBudget(m);
   const set = makeScenarios(m, { rng: makeRng(hashSeed(key)), maxScenarios: budget.search, maxHands: MAX_HANDS, fill: input.fill });
-  const refineSet = set.enumerated ? null : makeScenarios(m, { rng: makeRng(hashSeed(`${key}#refine`)), maxScenarios: budget.refine, maxHands: MAX_HANDS, fill: input.fill });
+  const refineSet = set.enumerated || input.refine === false ? null : makeScenarios(m, { rng: makeRng(hashSeed(`${key}#refine`)), maxScenarios: budget.refine, maxHands: MAX_HANDS, fill: input.fill });
   // 並び順が結果に関係するのはオーダーだけ(カオスでは出る順がランダムなので、デッキの並びは関係しない)
   const ordered = set.variants.some((v) => v.rules.pick === 'order');
   const searching = input.mode === 'search';

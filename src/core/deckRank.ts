@@ -14,8 +14,8 @@ export function deckKindNote(kind: DeckEvalKind, prior?: HandPrior): string {
   return '相手の裏向きの手札(や並び順)を知っている前提で解いた、楽観側の目安です。';
 }
 
-/** どんな状況を想定したか */
-export function scenarioSummary(m: Matchup, set: ScenarioSet): string {
+/** どんな状況を想定したか。refines = 上位のデッキを大きいシナリオで測り直すか */
+export function scenarioSummary(m: Matchup, set: ScenarioSet, refines = true): string {
   const n = set.scenarios.length;
   const parts: string[] = [];
   if (set.variants.length > 1) parts.push('ルーレットの結果');
@@ -25,7 +25,8 @@ export function scenarioSummary(m: Matchup, set: ScenarioSet): string {
   if (set.variants.some((v) => v.rules.pick === 'order')) parts.push('相手の並び順');
   if (set.variants.some((v) => v.rules.pick === 'chaos')) parts.push('カードの出る順');
   const what = parts.filter(Boolean).join(' × ');
-  return set.enumerated ? `${what} の全 ${n} 通りを調べます。` : `${what} の組み合わせから ${n} 通りを選んで調べます(上位のデッキは、通り数を増やして測り直します)。`;
+  if (set.enumerated) return `${what} の全 ${n} 通りを調べます。`;
+  return `${what} の組み合わせから ${n} 通りを選んで調べます${refines ? '(上位のデッキは、通り数を増やして測り直します)' : ''}。`;
 }
 
 export interface DeckLine {

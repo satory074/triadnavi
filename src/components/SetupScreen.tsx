@@ -1,18 +1,22 @@
 import { useState } from 'react';
 import {
-  applyNpc, applyTournament, clearNpc, clearOppSlot, revealPoolCard, selectableRules, setMode, setupProblems, setupWarnings, toggleRule, type MatchMode, type SetupDraft,
+  applyNpc, applyOpenRuleset, applyTournament, clearNpc, clearOppSlot, revealPoolCard, selectableRules, setMode, setupProblems, setupWarnings, toggleRule, type MatchMode,
+  type SetupDraft,
 } from '../core/appState';
 import { DECK_PROBLEM_TEXT, type Collection } from '../core/collection';
 import type { SavedData, SavedDeck } from '../core/presets';
 import { renameDeck, sameCard } from '../core/presets';
 import { RULE_ID, rulesFromIds } from '../core/rules';
 import type { CardDef } from '../core/types';
-import { competitionById, handProblems, npcById, npcCards, toCardDef, type NpcInfo } from '../data';
+import { competitionById, handProblems, npcById, npcCards, openRulesetById, openRulesetLabel, toCardDef, type NpcInfo } from '../data';
 import { CardEditor } from './CardEditor';
 import { CardView } from './CardView';
+import { ConfirmAction } from './ConfirmAction';
 import { DeckAdvisor } from './DeckAdvisor';
 import { DeckPicker } from './DeckPicker';
+import { DraftPanel } from './DraftPanel';
 import { NpcPicker } from './NpcPicker';
+import { OpenRulesetPicker } from './OpenRulesetPicker';
 import { OpponentPanel } from './OpponentPanel';
 import { RuleChips } from './RuleChips';
 import { RuleNames } from './RuleNames';
@@ -33,6 +37,7 @@ type Target = { kind: 'my'; slot: number } | { kind: 'opp'; slot: number } | { k
 const MODES: { mode: MatchMode; label: string }[] = [
   { mode: 'free', label: '通常' },
   { mode: 'tournament', label: '大会' },
+  { mode: 'open', label: 'オフィシャルトーナメント' },
 ];
 
 export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStart, onOpenCollection }: Props) {
@@ -42,6 +47,9 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
   const problems = setupProblems(draft);
   const warnings = setupWarnings(draft);
   const competition = draft.mode === 'tournament' ? competitionById(draft.tournamentId) : undefined;
+  const openRuleset = draft.mode === 'open' ? openRulesetById(draft.openRulesetId) : undefined;
+  const drafting = draft.mode === 'open';
+  const filled = draft.myCards.filter((c) => c !== null).length;
   // 大会の固定ルールと違うチップが選ばれている(ルーレットの大会は、対戦が始まってから結果を足すので除く)
   const ruleDrift = competition !== undefined && !competition.rules.includes(RULE_ID.roulette)
     && JSON.stringify([...draft.ruleIds].sort((a, b) => a - b)) !== JSON.stringify(selectableRules(competition.rules).sort((a, b) => a - b));
@@ -109,12 +117,17 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
         {draft.mode === 'tournament' && (
           <p className="note">ゴールドソーサーの大会(ランキング形式)。ルールは大会ごとに固定で、流行ルールは適用されません。相手はオートマッチングのプレイヤーか、カードバトルルームの NPC です。</p>
         )}
+        {drafting && (
+          <p className="note">8 人で 3 試合のオフィシャルトーナメント。ドラフト(提示された 3 つのセットから選ぶ × 3 回)で組んだデッキを、3 試合とも使います。</p>
+        )}
       </section>
 
       <section>
-        <h2>{draft.mode === 'tournament' ? '大会と相手' : '対戦相手'}</h2>
+        <h2>{draft.mode === 'tournament' ? '大会と相手' : drafting ? 'トーナメントのルール' : '対戦相手'}</h2>
         {draft.mode === 'tournament' ? (
           <TournamentPicker draft={draft} onPick={(t) => onDraft(applyTournament(draft, t))} onNpc={pickNpc} onPlayer={() => onDraft(clearNpc(draft))} />
+        ) : drafting ? (
+          <OpenRulesetPicker draft={draft} onPick={(r) => onDraft(applyOpenRuleset(draft, r))} />
         ) : (
           <NpcPicker npcId={draft.npcId} onPick={pickNpc} onClear={() => onDraft(clearNpc(draft))} />
         )}
@@ -137,6 +150,7 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
 
       <section>
         <h2>この対戦のルール</h2>
+        {openRuleset && <p className="note">{openRulesetLabel(openRuleset)}。ドラフトは常に有効です。受付の表示と違えば、下で直してください。</p>}
         {competition && (
           <p className="note">
             {competition.name} の固定ルール: <RuleNames ids={competition.rules} />
@@ -159,7 +173,8 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
       </section>
 
       <section>
-        <h2>自分の手札</h2>
+        <h2>{drafting ? 'ドラフトで組む自分の手札' : '自分の手札'}</h2>
+        {drafting && filled < 5 && <DraftPanel draft={draft} onDraft={onDraft} />}
         <div className="hand-row">
           {draft.myCards.map((card, i) => (
             <div className="slot" key={i}>
@@ -172,18 +187,27 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
             </div>
           ))}
         </div>
-        {handProblems(draft.myCards).map((p) => (
+        {/* ドラフトのデッキはレアリティの制限を見ない(貸し出しのカードで、★1〜★5 が 1 枚ずつ) */}
+        {!drafting && handProblems(draft.myCards).map((p) => (
           <p className="note note-warn" key={p}>{DECK_PROBLEM_TEXT[p]}。ゲーム内ではこのデッキを組めません。</p>
         ))}
         {rules.pick === 'order' && <p className="note">オーダーでは左から順に出すことになります。デッキの並び順どおりに入れてください。</p>}
-        <DeckPicker
-          decks={saved.decks}
-          current={draft.myCards}
-          onLoad={(d) => onDraft({ ...draft, myCards: d.cards })}
-          onSave={saveDeck}
-          onRename={(id, name) => onSaved(renameDeck(saved, id, name))}
-          onDelete={(id) => onSaved({ ...saved, decks: saved.decks.filter((d) => d.id !== id) })}
-        />
+        {drafting ? (
+          filled > 0 && (
+            <p className="hand-extra">
+              <ConfirmAction className="btn-tertiary btn-sm" small label="ドラフトをやり直す" confirmLabel="手札を空にする" onConfirm={() => onDraft({ ...draft, myCards: [null, null, null, null, null] })} />
+            </p>
+          )
+        ) : (
+          <DeckPicker
+            decks={saved.decks}
+            current={draft.myCards}
+            onLoad={(d) => onDraft({ ...draft, myCards: d.cards })}
+            onSave={saveDeck}
+            onRename={(id, name) => onSaved(renameDeck(saved, id, name))}
+            onDelete={(id) => onSaved({ ...saved, decks: saved.decks.filter((d) => d.id !== id) })}
+          />
+        )}
       </section>
 
       {/* 重い任意の機能なので、対戦相手・ルール・手札の後ろに畳んで置く */}
@@ -194,6 +218,7 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
           savedDecks={saved.decks}
           onUse={(cards) => onDraft({ ...draft, myCards: cards })}
           onOpenCollection={onOpenCollection}
+          searchable={!drafting}
         />
       </section>
 

@@ -19,6 +19,8 @@ interface Props {
   savedDecks: readonly SavedDeck[];
   onUse: (cards: CardDef[]) => void;
   onOpenCollection: () => void;
+  /** false なら「今のデッキを評価」だけ(ドラフトではデッキを探さない) */
+  searchable?: boolean;
 }
 
 type Mode = 'evaluate' | 'owned' | 'all';
@@ -50,7 +52,7 @@ function asDeckCards(cards: readonly CardDef[]): DeckCard[] {
  * 今のデッキの評価と、手持ちからのデッキの提案。探索は数分かかることがあるので、背景クリックで閉じてしまうモーダルではなく、
  * 対戦前の画面にそのまま置く。対戦条件(相手・ルール)を変えたら結果は古くなるので、計算を止めて出し直してもらう。
  */
-export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollection }: Props) {
+export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollection, searchable = true }: Props) {
   const [run, setRun] = useState<Run | null>(null);
   // 畳んだままにできるが、探索中は開いたままにする(閉じると進み具合が見えなくなる)
   const [open, setOpen] = useState(false);
@@ -87,14 +89,18 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
         <>
           <div className="advisor-actions">
             <button type="button" className="btn" disabled={running || !myDeck} onClick={() => start('evaluate')}>今のデッキを評価</button>
-            {owned.length >= 5 ? (
+            {searchable && (owned.length >= 5 ? (
               <button type="button" className="btn" disabled={running} onClick={() => start('owned')}>手持ち {owned.length} 枚から探す</button>
             ) : (
               <button type="button" className="btn" onClick={onOpenCollection}>手持ちを登録する</button>
-            )}
-            <button type="button" className="btn-tertiary" disabled={running} onClick={() => start('all')}>全カードを持っている前提で探す</button>
+            ))}
+            {searchable && <button type="button" className="btn-tertiary" disabled={running} onClick={() => start('all')}>全カードを持っている前提で探す</button>}
           </div>
-          <p className="note">相手が最善を尽くしても勝ちが確定する状況が、最も多いデッキを探します。探索には数十秒から数分かかります。途中で止めても、その時点の最良が残ります。</p>
+          <p className="note">
+            {searchable
+              ? '相手が最善を尽くしても勝ちが確定する状況が、最も多いデッキを探します。探索には数十秒から数分かかります。途中で止めても、その時点の最良が残ります。'
+              : 'ドラフトで組んだデッキを、想定した相手に対して空の盤面から読み切ります。'}
+          </p>
         </>
       )}
 
@@ -105,7 +111,7 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
         <div className="advisor-result">
           <div className="analysis-head">
             <span className={`kind kind-${run.kind === 'exact' ? 'exact' : 'estimate'}`}>{DECK_KIND_LABEL[run.kind]}</span>
-            <span className="muted">{scenarioSummary(matchup, run.context.set)}</span>
+            <span className="muted">{scenarioSummary(matchup, run.context.set, run.context.refineSet !== null)}</span>
           </div>
           {running ? (
             <div className="search-progress">
@@ -138,7 +144,7 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
               key={e.key}
               search={search}
               evaluation={e}
-              run={run}
+              context={run.context}
               title={run.mode === 'evaluate' ? '今のデッキ' : i === 0 ? '見つかった中で最良' : `候補 ${i + 1}`}
               onUse={run.mode === 'evaluate' ? undefined : () => onUse(e.cards.map((c) => ({ sides: c.sides, type: c.type, label: c.label })))}
               replaces={draft.myCards.some((c) => c !== null)}
@@ -161,15 +167,16 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
 interface ResultProps {
   search: DeckSearch;
   evaluation: DeckEval;
-  run: Run;
+  context: DeckContext;
   title: string;
   onUse?: () => void;
   /** 今の手札が入っている(使うと上書きされる)*/
   replaces: boolean;
 }
 
-function DeckResult({ search, evaluation, run, title, onUse, replaces }: ResultProps) {
-  const rows = variantRows(search, evaluation, run.context.set, run.context.refineSet);
+/** デッキ 1 つの結果(手札、勝ち/分/負の帯、説明、ルーレットの内訳)。ドラフトの比較(DraftPanel)でも使う */
+export function DeckResult({ search, evaluation, context, title, onUse, replaces }: ResultProps) {
+  const rows = variantRows(search, evaluation, context.set, context.refineSet);
   const score = deckScore(search, evaluation);
   return (
     <div className="advisor-deck">
