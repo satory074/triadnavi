@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { chaosExactFeasible } from '../core/analyze';
 import { toggleRule } from '../core/appState';
-import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, type MatchEvent, type MatchSetup, type RevealRef, type SwapRef } from '../core/match';
+import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, unrevealCard, type MatchEvent, type MatchSetup, type MatchView, type RevealRef, type SwapRef } from '../core/match';
 import { guaranteeKind, placedCount, positionKey, type Position } from '../core/position';
 import { learnCards, type SavedData } from '../core/presets';
 import { recommended } from '../core/rank';
 import { hashSeed, makeRng } from '../core/rng';
-import { RULE_NAMES, ruleIdsOf, typeSign } from '../core/rules';
+import { ruleIdsOf, typeSign } from '../core/rules';
 import type { MoveEval } from '../core/scheduler';
 import { buildRematch, MAX_REMATCHES } from '../core/suddenDeath';
-import type { CardDef, Player } from '../core/types';
+import type { CardDef, Player, RuleSet } from '../core/types';
 import { makeChaosWorlds, makeWorlds, type World } from '../core/worlds';
 import { samplePriorCard, type PriorLevel } from '../data';
 import { useSolver } from '../hooks/useSolver';
@@ -21,6 +21,7 @@ import { ConfirmAction } from './ConfirmAction';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { RuleChips } from './RuleChips';
+import { RuleNames } from './RuleNames';
 
 interface Props {
   setup: MatchSetup;
@@ -29,7 +30,8 @@ interface Props {
   saved: SavedData;
   onEvents: (next: MatchEvent[]) => void;
   onRematch: (next: MatchSetup) => void;
-  onNewMatch: () => void;
+  /** 対局の記録を閉じて設定画面へ */
+  onSetup: () => void;
   onSaved: (next: SavedData) => void;
   /** 先攻を変える(1 枚目を置くまで) */
   onFirst: (first: Player) => void;
@@ -39,11 +41,11 @@ interface Props {
   onRules: (ruleIds: number[], fallenAceInCombo: boolean) => void;
 }
 
-export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRematch, onNewMatch, onSaved, onFirst, onRestart, onRules }: Props) {
+export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRematch, onSetup, onSaved, onFirst, onRestart, onRules }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const [adhoc, setAdhoc] = useState<CardDef | null>(null);
-  // reveal = 相手の裏向きの手札を開く、swap = スワップで来たカードを選ぶ、mismatch = 入力した手札と違うカードが出た
-  const [picker, setPicker] = useState<'reveal-pool' | 'reveal-editor' | 'swap-pool' | 'swap-editor' | 'mismatch' | null>(null);
+  // 候補に無いカードを数字で入れる。reveal = 見えている相手のカードを開く、swap = スワップで来たカード、played = 相手が出したカード
+  const [picker, setPicker] = useState<'reveal-editor' | 'swap-editor' | 'played-editor' | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [swapMode, setSwapMode] = useState(false);
   // スワップで相手から来たカード(渡す自分のカードを選ぶまで確定しない)
@@ -98,23 +100,42 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   };
 
   /**
-   * 相手の裏向きの手札を 1 枚開く。cardIndex は開いた後の cards への添字
-   * (候補から開くならその添字、手入力なら末尾に足される)。
-   * 相手の番なら「今出したカード」であることが多いので、そのまま選んでマス待ちにする。
+   * 見えている相手のカード(オールオープン等)を、出される前に開く。自分の番だけ。
+   * 開き間違いは、開いたカードの下の「戻す」で直す(unrevealCard)
    */
-  const reveal = (ref: RevealRef, cardIndex: number) => {
+  const reveal = (ref: RevealRef) => {
     onEvents([...events.slice(0, view.applied), { t: 'reveal', card: ref }]);
-    setAdhoc(null);
-    setPicker(null);
-    if (!myTurn) setSelected(cardIndex);
+    reset();
   };
 
   const revealFromPool = (cardIndex: number) => {
     const ref = cardRefOf(setup, cardIndex, view.revealed);
-    if (ref?.from === 'pool') reveal(ref, cardIndex);
+    if (ref?.from === 'pool') reveal(ref);
   };
 
-  const openReveal = () => setPicker(view.oppPool.length > 0 ? 'reveal-pool' : 'reveal-editor');
+  /** 相手が出したカードを選ぶ(マスをタップするまで記録しない。押し間違えたら押し直すだけ) */
+  const pickPlayed = (cardIndex: number) => {
+    setAdhoc(null);
+    setSelected(selected === cardIndex ? null : cardIndex);
+  };
+
+  // 開いて、まだ出していないカード → 「戻す」を押した後の記録
+  const revertible = useMemo(() => {
+    const m = new Map<number, MatchEvent[]>();
+    for (const i of view.oppKnown) {
+      if (!view.revealed.includes(i)) continue;
+      const next = unrevealCard(setup, events, i);
+      if (next) m.set(i, next);
+    }
+    return m;
+  }, [setup, events, view]);
+
+  const unreveal = (cardIndex: number) => {
+    const next = revertible.get(cardIndex);
+    if (!next) return;
+    onEvents(next);
+    reset();
+  };
 
   const toggleSwap = () => {
     setSwapIn(null);
@@ -184,21 +205,27 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   const recommendedMove = solver.analysis ? recommended(solver.analysis) : null;
   // 「おすすめ通りに打った」のボタンが出ている時だけ、Enter でも同じことをする
   const enterMove = myTurn && position && !swapMode && !solver.error ? recommendedMove : null;
+  const canRestart = events.length > 0 || setup.round > 0;
 
+  // キーボード: Enter = おすすめ通りに打った、R = はじめから。ダイアログが開いている時と文字の入力中は効かない
   useEffect(() => {
-    if (!enterMove) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter' || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
       if (document.querySelector('dialog[open]')) return;
       const t = e.target;
       if (t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || (t instanceof HTMLInputElement && t.type !== 'checkbox')) return;
-      // マウスで押したボタン(「1 手戻す」など)にはフォーカスが残るので、既定の動作を止めないとそのボタンがもう一度押される
-      e.preventDefault();
-      apply(enterMove);
+      if (e.key === 'Enter' && !e.shiftKey && enterMove) {
+        // マウスで押したボタン(「1 手戻す」など)にはフォーカスが残るので、既定の動作を止めないとそのボタンがもう一度押される
+        e.preventDefault();
+        apply(enterMove);
+      } else if ((e.key === 'r' || e.key === 'R') && canRestart) {
+        e.preventDefault();
+        restart();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // apply は描画のたびに作り直されるので、依存配列は付けずに毎回付け直す
+    // apply と restart は描画のたびに作り直されるので、依存配列は付けずに毎回付け直す
   });
 
   const baseCount = setup.myHand.length + setup.oppSlots.filter((c) => c !== null).length + setup.oppPool.length;
@@ -230,21 +257,21 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
 
   return (
     <main className="play">
-      {/* 1 行目: ルールと画面の移動。「設定に戻る」は記録を閉じるので、対局中は 2 段階の確認にする */}
+      {/* 1 行目: ルールと画面の移動。「設定を変える」は記録を閉じるので、対局中は 2 段階の確認にする */}
       <div className="match-bar">
         <div className="match-rules">
           {setup.round > 0 && <span className="chip chip-on">サドンデス 再戦 {setup.round} 回目</span>}
-          <span className="match-rules-text">{ruleIds.length > 0 ? ruleIds.map((id) => RULE_NAMES[id]).join('・') : '追加ルールなし'}</span>
+          <span className="match-rules-text">{ruleIds.length > 0 ? <RuleNames ids={ruleIds} /> : '追加ルールなし'}</span>
           <button type="button" className="btn-tertiary btn-sm" onClick={() => setRulesOpen(true)}>
             <Icon name="rules" />ルールを変更
           </button>
         </div>
         <div className="match-nav">
           {inProgress ? (
-            <ConfirmAction className="btn-tertiary btn-sm" small label={<><Icon name="back" />設定に戻る</>} confirmLabel="対局を閉じて戻る" onConfirm={onNewMatch} />
+            <ConfirmAction className="btn-tertiary btn-sm" small label={<><Icon name="back" />設定を変える</>} confirmLabel="対局を閉じて設定へ" onConfirm={onSetup} />
           ) : (
-            <button type="button" className="btn-tertiary btn-sm" onClick={onNewMatch}>
-              <Icon name="back" />設定に戻る
+            <button type="button" className="btn-tertiary btn-sm" onClick={onSetup}>
+              <Icon name="back" />設定を変える
             </button>
           )}
         </div>
@@ -263,8 +290,9 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
         <button type="button" className="tool-btn" onClick={undo} disabled={view.applied === 0}>
           <Icon name="undo" />1 手戻す
         </button>
-        <button type="button" className="tool-btn" onClick={restart} disabled={events.length === 0 && setup.round === 0}>
+        <button type="button" className="tool-btn" onClick={restart} disabled={!canRestart} aria-keyshortcuts="R">
           <Icon name="restart" />はじめから
+          <kbd className="key-hint">R</kbd>
         </button>
         {view.placed === 0 && !view.finished && (
           <button type="button" className={`tool-btn${swapMode ? ' is-on' : ''}`} aria-pressed={swapMode} onClick={toggleSwap}>
@@ -283,25 +311,33 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
       <div className="table-layout">
         <div className="table-side">
           <div className="hand-row hand-opp" aria-label="相手の手札">
-            {view.oppKnown.map((i) => (
-              <CardView key={i} card={view.cards[i]} owner={1} size="sm" shift={shiftOf(i)} selected={swapMode ? swapIn?.index === i : selected === i}
-                dimmed={swapMode ? false : myTurn || view.finished}
-                onClick={swapMode ? () => takeFromOpp(i) : !myTurn && !view.finished ? () => { setAdhoc(null); setSelected(selected === i ? null : i); } : undefined} />
-            ))}
+            {view.oppKnown.map((i) => {
+              const card = (
+                <CardView key={i} card={view.cards[i]} owner={1} size="sm" shift={shiftOf(i)} selected={swapMode ? swapIn?.index === i : selected === i}
+                  dimmed={swapMode ? false : myTurn || view.finished}
+                  onClick={swapMode ? () => takeFromOpp(i) : !myTurn && !view.finished ? () => pickPlayed(i) : undefined} />
+              );
+              // 対局中に開いて、まだ出していないカードは「?」に戻せる(開き間違いの修正)
+              return revertible.has(i) && !swapMode && !view.finished ? (
+                <div className="slot" key={i}>
+                  {card}
+                  <button type="button" className="btn-tertiary slot-remove" onClick={() => unreveal(i)} aria-label={`開いた ${view.cards[i].label ?? view.cards[i].sides.join('/')} を「?」に戻す`}>戻す</button>
+                </div>
+              ) : card;
+            })}
             {Array.from({ length: view.oppUnknown }, (_, k) => (
-              <CardView key={`u${k}`} card={null} owner={1} size="sm" dimmed={view.finished}
-                onClick={view.finished ? undefined : swapMode ? () => setPicker(view.oppPool.length > 0 ? 'swap-pool' : 'swap-editor') : openReveal}
-                ariaLabel={swapMode ? '相手から来たカードを入力' : '相手の裏向きのカードを入力'} />
+              <CardView key={`u${k}`} card={null} owner={1} size="sm" dimmed={view.finished} ariaLabel="相手の裏向きのカード" />
             ))}
           </div>
-          {!view.finished && !swapMode && view.oppUnknown > 0 && setup.rules.open !== 'none' && (
-            <p className="note">
-              {setup.rules.open === 'all' ? 'オールオープン' : 'スリーオープン'}で見えているカードは、「?」をタップして入れてください。相手の手札が全て分かると「確定」で読めます。
-            </p>
+          {!view.finished && view.oppUnknown > 0 && (
+            <OppPool view={view} shiftOf={shiftOf} myTurn={myTurn} swapMode={swapMode} open={setup.rules.open}
+              selected={swapMode ? swapIn?.index ?? null : selected}
+              onPick={swapMode ? takeFromOpp : !myTurn ? pickPlayed : setup.rules.open !== 'none' ? revealFromPool : null}
+              onUnlisted={() => setPicker(swapMode ? 'swap-editor' : !myTurn ? 'played-editor' : 'reveal-editor')} />
           )}
-          {!myTurn && !view.finished && view.oppUnknown === 0 && (
+          {!myTurn && !view.finished && !swapMode && view.oppUnknown === 0 && (
             <p className="hand-extra">
-              <button type="button" className="btn-tertiary" onClick={() => setPicker('mismatch')}>入力と違うカードが出た</button>
+              <button type="button" className="btn-tertiary" onClick={() => setPicker('played-editor')}>入力と違うカードが出た</button>
             </p>
           )}
           {adhoc && <p className="note">出たカード: {adhoc.label ?? adhoc.sides.join('/')}。置かれたマスをタップしてください。</p>}
@@ -346,7 +382,10 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
                   リストに無かったカード {unlisted.length} 枚を、この NPC の候補に追加
                 </button>
               )}
-              <button type="button" className="btn btn-primary" onClick={onNewMatch}>同じ相手ともう一戦</button>
+              <button type="button" className="btn btn-primary" aria-keyshortcuts="R" onClick={() => { restart(); window.scrollTo(0, 0); }}>
+                同じ相手ともう一戦
+                <kbd className="key-hint">R</kbd>
+              </button>
             </section>
           )}
           {myTurn && position && !swapMode && <MoveTable solver={solver} cards={view.cards} />}
@@ -365,44 +404,74 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
           )}
         </Modal>
       )}
-      {picker === 'reveal-pool' && (
-        <Modal title="相手のカード" onClose={() => setPicker(null)}>
-          <p className="note">相手の手札に入れます。相手が今このカードを出したなら、続けて置かれたマスをタップしてください。</p>
-          <div className="pool-row pool-pick">
-            {view.oppPool.map((i) => (
-              <div className="slot" key={i}>
-                <CardView card={view.cards[i]} owner={1} shift={shiftOf(i)} onClick={() => revealFromPool(i)} />
-              </div>
-            ))}
-          </div>
-          <button type="button" className="btn-tertiary" onClick={() => setPicker('reveal-editor')}>リストに無いカードだった</button>
-        </Modal>
-      )}
-      {picker === 'swap-pool' && (
-        <Modal title="相手から来たカード" onClose={() => setPicker(null)}>
-          <p className="note">スワップで自分の手札に来たカードです。このあと、相手に渡した自分のカードをタップしてください。</p>
-          <div className="pool-row pool-pick">
-            {view.oppPool.map((i) => (
-              <div className="slot" key={i}>
-                <CardView card={view.cards[i]} owner={1} shift={shiftOf(i)} onClick={() => takeFromOpp(i)} />
-              </div>
-            ))}
-          </div>
-          <button type="button" className="btn-tertiary" onClick={() => setPicker('swap-editor')}>リストに無いカードだった</button>
-        </Modal>
-      )}
       {picker === 'swap-editor' && (
         <CardEditor title="相手から来たカード" owner={1} typeMatters={setup.rules.typeShift !== 'none'}
           onCommit={(card) => { setSwapIn({ ref: { from: 'adhoc', card }, card, index: -1 }); setPicker(null); }} onClose={() => setPicker(null)} />
       )}
       {picker === 'reveal-editor' && (
-        <CardEditor title="相手のカード" owner={1} typeMatters={setup.rules.typeShift !== 'none'}
-          onCommit={(card) => reveal({ from: 'adhoc', card }, view.cards.length)} onClose={() => setPicker(null)} />
+        <CardEditor title="見えている相手のカード" owner={1} typeMatters={setup.rules.typeShift !== 'none'}
+          onCommit={(card) => reveal({ from: 'adhoc', card })} onClose={() => setPicker(null)} />
       )}
-      {picker === 'mismatch' && (
+      {picker === 'played-editor' && (
         <CardEditor title="相手が出したカード" owner={1} typeMatters={setup.rules.typeShift !== 'none'}
           onCommit={(card) => { setSelected(null); setAdhoc(card); setPicker(null); }} onClose={() => setPicker(null)} />
       )}
     </main>
+  );
+}
+
+interface OppPoolProps {
+  view: MatchView;
+  shiftOf: (i: number) => number;
+  myTurn: boolean;
+  swapMode: boolean;
+  open: RuleSet['open'];
+  selected: number | null;
+  /** 候補をタップした時。null = 押せない(自分の番でオープンが無い時。見えないカードは開く理由が無く、押し間違いの元になる) */
+  onPick: ((cardIndex: number) => void) | null;
+  /** 候補に無いカードを数字で入れる */
+  onUnlisted: () => void;
+}
+
+/**
+ * 相手の裏向きのカードに入りうる候補。最初から並べて、タップ 1 回で選べるようにしている(以前は「?」→ 一覧のダイアログ)。
+ * タップの意味は親が決める: 相手の番 = 出したカード(マスを押すまで記録しない)、自分の番 = 見えているカードを開く、スワップ中 = 来たカード。
+ * 手番のたびに盤面の位置が動かないよう、自分の番でも薄く出したままにし、案内は 1 行の見出しに収める。
+ * 候補に無いカードのボタンは候補の列の最後のマスに置く(行を増やすと、スマホで盤面の下の段が画面から出る)
+ */
+function OppPool({ view, shiftOf, myTurn, swapMode, open, selected, onPick, onUnlisted }: OppPoolProps) {
+  const hasPool = view.oppPool.length > 0;
+  const revealing = myTurn && !swapMode && open !== 'none';
+  const head = revealing
+    ? '見えているカードは、タップで相手の手札へ'
+    : hasPool ? `候補(裏向きの ${view.oppUnknown} 枚はこの中のどれか)` : `裏向き ${view.oppUnknown} 枚(候補が分かりません)`;
+  const unlisted = swapMode
+    ? hasPool ? 'リストに無いカードが来た' : '来たカードを数字で入れる'
+    : !myTurn
+      ? hasPool ? 'リストに無いカードを出した' : '出したカードを数字で入れる'
+      : hasPool ? 'リストに無いカードが見えている' : '見えているカードを数字で入れる';
+  return (
+    <section className="opp-pool" aria-label="相手の候補のカード">
+      <p className="opp-pool-head">{head}</p>
+      {hasPool ? (
+        <div className="opp-pool-row">
+          {view.oppPool.map((i) => (
+            <CardView key={i} card={view.cards[i]} owner={1} size="sm" shift={shiftOf(i)} selected={selected === i} dimmed={!onPick}
+              onClick={onPick ? () => onPick(i) : undefined} />
+          ))}
+          {onPick && (
+            <button type="button" className="pool-unlisted" onClick={onUnlisted} aria-label={unlisted}>
+              候補に無い
+            </button>
+          )}
+        </div>
+      ) : (
+        onPick && (
+          <p className="hand-extra">
+            <button type="button" className="btn-tertiary btn-sm" onClick={onUnlisted}>{unlisted}</button>
+          </p>
+        )
+      )}
+    </section>
   );
 }

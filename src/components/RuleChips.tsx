@@ -1,4 +1,6 @@
-import { RULE_ID, RULE_NAMES } from '../core/rules';
+import { RULE_HELP, RULE_ID, RULE_NAMES } from '../core/rules';
+import { useHoverTip } from '../hooks/useHoverTip';
+import { Tip } from './Tip';
 
 interface Props {
   ruleIds: readonly number[];
@@ -12,18 +14,35 @@ const TOGGLES: readonly number[] = [RULE_ID.same, RULE_ID.plus, RULE_ID.reverse,
  * 公式に排他の 3 組。独立したチップに見えると両方選べると思われるので、「なし / A / B」のセグメントで見せる。
  * 排他の処理は toggleRule にあるので、ここは「なし」で有効な方を外し、A/B で選ぶだけ
  */
-const GROUPS: readonly { label: string; none: string; ids: readonly number[]; short: Record<number, string> }[] = [
-  { label: 'オープン', none: 'なし', ids: [RULE_ID.threeOpen, RULE_ID.allOpen], short: { [RULE_ID.threeOpen]: 'スリー', [RULE_ID.allOpen]: 'オール' } },
-  { label: 'タイプ', none: 'なし', ids: [RULE_ID.ascension, RULE_ID.descension], short: { [RULE_ID.ascension]: 'アセンド', [RULE_ID.descension]: 'ディセンド' } },
-  { label: '出す順', none: '自由', ids: [RULE_ID.order, RULE_ID.chaos], short: { [RULE_ID.order]: 'オーダー', [RULE_ID.chaos]: 'カオス' } },
+const GROUPS: readonly { label: string; none: string; noneHelp: string; ids: readonly number[]; short: Record<number, string> }[] = [
+  {
+    label: 'オープン', none: 'なし', noneHelp: '相手の手札は裏向きで、出されるまで分かりません。',
+    ids: [RULE_ID.threeOpen, RULE_ID.allOpen], short: { [RULE_ID.threeOpen]: 'スリー', [RULE_ID.allOpen]: 'オール' },
+  },
+  {
+    label: 'タイプ', none: 'なし', noneHelp: 'タイプによって数字が強くなったり弱くなったりしません。',
+    ids: [RULE_ID.ascension, RULE_ID.descension], short: { [RULE_ID.ascension]: 'アセンド', [RULE_ID.descension]: 'ディセンド' },
+  },
+  {
+    label: '出す順', none: '自由', noneHelp: '手札のどのカードでも、好きな順に出せます。',
+    ids: [RULE_ID.order, RULE_ID.chaos], short: { [RULE_ID.order]: 'オーダー', [RULE_ID.chaos]: 'カオス' },
+  },
 ];
 
+/** 下の「ルールの説明」に並べる順(画面の並びと同じ) */
+const ALL_IDS: readonly number[] = [...TOGGLES, ...GROUPS.flatMap((g) => g.ids)];
+
+/**
+ * ルールの選択(設定画面と、対局中の「ルールを変更」)。マウスを乗せるとルールの説明が出る。
+ * チップのタップはルールの切り替えなので、タッチの端末向けに説明の一覧を <details> に畳んで添える
+ */
 export function RuleChips({ ruleIds, onToggle }: Props) {
+  const { id: tipId, tip, bind } = useHoverTip();
   return (
     <div className="rule-picker" role="group" aria-label="有効なルール">
       <div className="chips">
         {TOGGLES.map((id) => (
-          <button type="button" key={id} className={`chip${ruleIds.includes(id) ? ' chip-on' : ''}`} aria-pressed={ruleIds.includes(id)} onClick={() => onToggle(id)}>
+          <button type="button" key={id} className={`chip${ruleIds.includes(id) ? ' chip-on' : ''}`} aria-pressed={ruleIds.includes(id)} onClick={() => onToggle(id)} {...bind(String(id), RULE_HELP[id])}>
             {RULE_NAMES[id]}
           </button>
         ))}
@@ -42,6 +61,7 @@ export function RuleChips({ ruleIds, onToggle }: Props) {
                   onClick={() => {
                     if (active !== undefined) onToggle(active);
                   }}
+                  {...bind(`none-${g.label}`, g.noneHelp)}
                 >
                   {g.none}
                 </button>
@@ -55,6 +75,7 @@ export function RuleChips({ ruleIds, onToggle }: Props) {
                     onClick={() => {
                       if (active !== id) onToggle(id);
                     }}
+                    {...bind(String(id), RULE_HELP[id])}
                   >
                     {g.short[id]}
                   </button>
@@ -64,6 +85,19 @@ export function RuleChips({ ruleIds, onToggle }: Props) {
           );
         })}
       </div>
+      <details className="rule-help">
+        <summary>ルールの説明</summary>
+        <dl>
+          {ALL_IDS.map((id) => (
+            <div key={id} className="rule-help-row">
+              <dt>{RULE_NAMES[id]}</dt>
+              <dd>{RULE_HELP[id]}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+      {/* ダイアログ(ルールを変更)の中でも最上位レイヤーに乗るよう、吹き出しはこの中に描く */}
+      {tip && <Tip id={tipId} anchor={tip.anchor}>{tip.text}</Tip>}
     </div>
   );
 }

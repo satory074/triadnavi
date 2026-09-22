@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, type MatchEvent, type MatchSetup } from './match';
+import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, unrevealCard, type MatchEvent, type MatchSetup } from './match';
 import { guaranteeKind } from './position';
 import { learnCards, parseSaved, renameDeck, EMPTY_SAVED } from './presets';
 import { buildRematch, MAX_REMATCHES } from './suddenDeath';
@@ -153,6 +153,30 @@ describe('非公開手札', () => {
     expect(replay(baseSetup({ oppPool: [c(8, 8, 8, 8)] }), [{ t: 'reveal', card: { from: 'pool', index: 0 } }]).applied).toBe(0);
     const twice: MatchEvent[] = [{ t: 'reveal', card: { from: 'pool', index: 0 } }, { t: 'reveal', card: { from: 'pool', index: 0 } }];
     expect(replay(hidden(), twice).applied).toBe(1);
+  });
+
+  it('開き間違えたカードを戻しても、置いたカードの盤面は 1 マスも変わらず、不明スロットと候補が 1 つずつ戻る。出したカードは戻せない', () => {
+    const s = hidden();
+    const events: MatchEvent[] = [
+      { t: 'reveal', card: { from: 'pool', index: 0 } },
+      { t: 'reveal', card: { from: 'adhoc', card: c(9, 9, 9, 9) } },
+      // 2 枚目に開いたカード(revealed の 1 番)を出す。1 枚目を戻すと 0 番に詰まる
+      { t: 'place', by: 1, card: { from: 'revealed', index: 1 }, cell: 0 },
+      { t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 8 },
+    ];
+    const before = replay(s, events);
+    const wrong = before.revealed[0];
+    const next = unrevealCard(s, events, wrong);
+    expect(next).not.toBeNull();
+    const after = replay(s, next!);
+    expect(after.applied).toBe(next!.length);
+    const board = (v: typeof before) => v.state.board.map((x) => (x ? { sides: v.cards[x.card].sides, owner: x.owner } : null));
+    expect(board(after)).toEqual(board(before));
+    expect(after.oppUnknown).toBe(before.oppUnknown + 1);
+    expect(after.oppPool.length).toBe(before.oppPool.length + 1);
+    expect(after.oppKnown.some((i) => after.cards[i] === s.oppPool[0])).toBe(false);
+    // 出したカードは戻せない
+    expect(unrevealCard(s, events, before.revealed[1])).toBeNull();
   });
 
   it('cards への添字と CardRef を相互に変換できる', () => {

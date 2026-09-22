@@ -1,5 +1,5 @@
 import { useMemo, useState, type MouseEvent } from 'react';
-import { changeRules, draftToSetup, parseAppState, restartMatch, type AppState } from './core/appState';
+import { changeRules, draftToSetup, parseAppState, restartMatch, toTop, type AppState } from './core/appState';
 import { parseCollection } from './core/collection';
 import { parsePrefs } from './core/prefs';
 import { parseSaved } from './core/presets';
@@ -12,27 +12,27 @@ import { CardArtContext } from './hooks/useCardArt';
 import { usePersisted } from './hooks/usePersisted';
 
 export default function App() {
-  const [app, setApp] = usePersisted<AppState>('triadnavi:state:v1', parseAppState);
+  // トップは対局画面。開いた時に対局中でなければ、下書きから新しい対局を始める(手札が揃っていなければ設定画面)
+  const [app, setApp] = usePersisted<AppState>('triadnavi:state:v1', (raw) => toTop(parseAppState(raw)));
   const [saved, setSaved] = usePersisted('triadnavi:saved:v1', parseSaved);
   const [collection, setCollection] = usePersisted('triadnavi:collection:v1', parseCollection);
   const [prefs, setPrefs] = usePersisted('triadnavi:prefs:v1', parsePrefs);
   const [help, setHelp] = useState(false);
-  // 手持ちの画面は保存する状態(phase)には入れない。再読み込みしたら対戦前の画面に戻るだけでよい
+  // 手持ちの画面は保存する状態(phase)には入れない。再読み込みしたらトップに戻るだけでよい
   const [collecting, setCollecting] = useState(false);
-  const playing = app.phase === 'play' && app.setup !== null;
   // 手持ちの画面の見出し(所持 N / 475 枚)と同じ数え方でないと食い違うので、ownedCards を通す
   const ownedCount = useMemo(() => ownedCards(collection).length, [collection]);
 
-  // 対局の記録を閉じて対戦前の画面へ(設定の下書きは残る)
+  // 対局の記録を閉じて設定画面へ(設定の下書きは残る)。対局中の設定と下書きを食い違わせないため、記録は残さない
   const toSetup = () => setApp((s) => ({ ...s, phase: 'setup', setup: null, events: [] }));
 
-  // ロゴ = 対戦前の画面へ。対局中なら「設定に戻る」と同じ
+  // ロゴ = トップ(対局画面)へ。対局中なら記録はそのまま、設定画面からなら下書きで新しい対局を始める
   const goTop = (e: MouseEvent<HTMLAnchorElement>) => {
     // 新しいタブで開く操作(Ctrl/⌘ + クリック、中クリック)はブラウザに任せる
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     setCollecting(false);
-    if (app.phase !== 'setup') toSetup();
+    setApp(toTop);
     window.scrollTo(0, 0);
   };
 
@@ -50,16 +50,15 @@ export default function App() {
         <h1><a href={import.meta.env.BASE_URL} className="site-logo" onClick={goTop}>triadnavi</a></h1>
         <p className="tagline">トリプルトライアドの次の一手</p>
         <div className="site-actions">
-          {!playing && (
-            <button type="button" className={`btn${collecting ? ' is-on' : ''}`} aria-pressed={collecting} onClick={() => setCollecting(!collecting)}>
-              {ownedCount > 0 ? `手持ち ${ownedCount} 枚` : '手持ちを登録'}
-            </button>
-          )}
+          <button type="button" className={`btn${collecting ? ' is-on' : ''}`} aria-pressed={collecting} onClick={() => setCollecting(!collecting)}>
+            {ownedCount > 0 ? `手持ち ${ownedCount} 枚` : '手持ちを登録'}
+          </button>
           <button type="button" className="btn-tertiary" onClick={() => setHelp(true)}>保証できること</button>
         </div>
       </header>
 
-      {collecting && !playing ? (
+      {/* 対局中に開いても対局の記録は残る(PlayScreen は外れるので、戻った時に計算をやり直す) */}
+      {collecting ? (
         <CollectionScreen collection={collection} onChange={setCollection} onClose={() => setCollecting(false)} />
       ) : app.phase === 'play' && app.setup ? (
         <PlayScreen
@@ -72,7 +71,7 @@ export default function App() {
             setApp((s) => ({ ...s, setup, events: [] }));
             window.scrollTo(0, 0);
           }}
-          onNewMatch={toSetup}
+          onSetup={toSetup}
           // 下書きにも書いておくと、「はじめから」の後も直前に選んだ先攻のまま始まる
           onFirst={(first) => setApp((s) => ({ ...s, draft: { ...s.draft, first }, setup: s.setup && { ...s.setup, first } }))}
           onRestart={() => setApp(restartMatch)}

@@ -405,8 +405,57 @@ input:not([type]) {
   color: var(--paper-dim);
 }
 
+/* ルール名(対局画面の上、NPC の注意書き)。押すと説明が出るので、押せる物として薄い枠を付ける */
+.rule-names {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  vertical-align: middle;
+}
+
+.rule-name {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: var(--fs-sm);
+  cursor: help;
+}
+
+.rule-name:hover {
+  border-color: var(--paper-dim);
+}
+
+/* タッチの端末ではチップに乗せられないので、説明を一覧で添える(畳んでおく) */
+.rule-help {
+  margin-top: 0.5rem;
+}
+
+.rule-help summary {
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  color: var(--paper-dim);
+}
+
+.rule-help dl {
+  margin: 0.4rem 0 0;
+  font-size: var(--fs-sm);
+}
+
+.rule-help dt {
+  margin-top: 0.4rem;
+  font-weight: 700;
+}
+
+.rule-help dd {
+  margin: 0.1rem 0 0;
+  color: var(--paper-dim);
+}
+
 /* 指で押す端末では、押せる物を 44px 以上にする(WCAG 2.5.8 / Apple 44pt) */
 @media (pointer: coarse) {
+  .rule-name,
   .chip,
   .segmented button,
   .btn-tertiary,
@@ -957,9 +1006,9 @@ input:not([type]) {
   color: var(--paper-dim);
 }
 
-/* 入手方法の吹き出し。位置は SourceTip が描いた直後に決めるので、それまでは隠す。
-   下のカードのクリックを邪魔しないよう、マウスは素通しにする */
-.source-tip {
+/* 吹き出し(入手方法、ルールの説明)。位置は Tip が描いた直後に決めるので、それまでは隠す。
+   下の要素のクリックを邪魔しないよう、マウスは素通しにする */
+.tip {
   position: fixed;
   top: 0;
   left: 0;
@@ -972,8 +1021,12 @@ input:not([type]) {
   border-radius: 0.5rem;
   background: var(--mat-800);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  /* 薄い文字色の中(対局画面のルール名など)に描いても本文の色で出す */
+  color: var(--paper);
   font-size: var(--fs-sm);
+  font-weight: 400;
   line-height: 1.45;
+  text-align: left;
   pointer-events: none;
 }
 
@@ -1048,7 +1101,50 @@ textarea {
 .hand-opp {
   max-width: 19rem;
   margin: 0 auto 0.6rem;
-  align-items: center;
+  /* 開いた札の下に「戻す」が付くと高さが変わるので、札の上端を揃える */
+  align-items: start;
+}
+
+/* 相手の候補。手札と取り違えないよう、点線の枠で囲って見出しを付け、札も手札より一回り小さくする(6 列)。幅は相手の手札と同じ */
+.opp-pool {
+  max-width: 19rem;
+  margin: -0.2rem auto 0.6rem;
+  padding: 0.3rem 0.4rem 0.4rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.5rem;
+}
+
+.opp-pool-head {
+  margin: 0 0 0.3rem;
+  font-size: var(--fs-xs);
+  color: var(--paper-dim);
+}
+
+.opp-pool-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.35rem;
+}
+
+/* 候補に無いカードを数字で入れる。候補の列の最後のマスに、札と同じ大きさで置く */
+.pool-unlisted {
+  aspect-ratio: 4 / 5;
+  padding: 0.1rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 9% / 7%;
+  background: transparent;
+  color: var(--paper-dim);
+  font-size: var(--fs-xs);
+  line-height: 1.2;
+}
+
+.pool-unlisted:hover {
+  border-color: var(--paper-dim);
+  color: var(--paper);
+}
+
+.opp-pool .hand-extra {
+  margin: 0;
 }
 
 .hand-my {

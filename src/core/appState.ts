@@ -130,6 +130,16 @@ export function draftToSetup(draft: SetupDraft): MatchSetup | null {
 }
 
 /**
+ * トップ(起動時とロゴ)は対局画面。対局中ならそのまま(記録を消さない)、そうでなければ下書きから新しい対局を始める。
+ * 自分の手札が揃っていない(初めて開いた時など)なら、対局を作れないので設定画面。
+ */
+export function toTop(state: AppState): AppState {
+  if (state.phase === 'play' && state.setup) return state;
+  const setup = draftToSetup(state.draft);
+  return setup ? { ...state, phase: 'play', setup, events: [] } : { ...state, phase: 'setup', setup: null, events: [] };
+}
+
+/**
  * 「はじめから」: 同じ設定の最初の対局に戻す。対局中は下書きを変えられないので、下書きは 1 局目の設定のまま。
  * サドンデスの再戦で組み直した手札と回数は捨てる。
  */

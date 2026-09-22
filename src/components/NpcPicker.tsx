@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PRE_MATCH_RULE_IDS, RULE_NAMES } from '../core/rules';
 import { npcById, searchNpcs, type NpcInfo } from '../data';
 import { ConfirmAction } from './ConfirmAction';
+import { RuleNames } from './RuleNames';
 
 interface Props {
   npcId: number | null;
@@ -72,7 +73,7 @@ export function NpcPicker({ npcId, onPick, onClear }: Props) {
       </p>
       {pre.length > 0 && (
         <p className="note note-warn">
-          この NPC には「{pre.map((r) => RULE_NAMES[r]).join('」「')}」があります。対戦が始まってから、実際に決まったルールと手札を入れてください。
+          この NPC には <RuleNames ids={pre} /> があります。対戦が始まってから、実際に決まったルールと手札を入れてください。
         </p>
       )}
       {npc.usesRegional && <p className="note note-warn">流行ルールが適用される NPC です。今日の流行ルールも下で追加してください。</p>}

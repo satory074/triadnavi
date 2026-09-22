@@ -279,3 +279,48 @@ export function cardRefOf(setup: MatchSetup, cardIndex: number, revealed: readon
   const p = cardIndex - k;
   return p >= 0 && p < setup.oppPool.length ? { from: 'pool', index: p } : null;
 }
+
+/**
+ * 対局中に開いた相手のカードを「?」に戻す(開き間違いの修正)。戻した記録を足すのではなく、開いた記録(reveal)を消して
+ * 開かなかったことにする。後の記録が指す 'revealed' の添字は、消した位置より後を 1 つ詰める
+ * (reveal は必ず 1 件で 1 枚を revealed の末尾に足すので、ずれるのは 1 つだけ)。
+ * 戻せるのは reveal で開いてまだ出していないカードだけ。出した・交換したカード(後の記録が同じ添字を指す)、
+ * スワップで来たカードは null。
+ */
+export function unrevealCard(setup: MatchSetup, events: readonly MatchEvent[], cardIndex: number): MatchEvent[] | null {
+  const view = replay(setup, events);
+  const valid = events.slice(0, view.applied);
+  const r = view.revealed.indexOf(cardIndex);
+  if (r < 0 || !view.oppKnown.includes(cardIndex)) return null;
+
+  // r 番目を revealed に足した記録を探す
+  let k = -1;
+  for (let i = 0; i < valid.length && k < 0; i++) {
+    if (replay(setup, valid.slice(0, i + 1)).revealed.length > r) k = i;
+  }
+  if (k < 0 || valid[k].t !== 'reveal') return null;
+
+  const shift = <T extends CardRef>(ref: T): T | null => {
+    if (ref.from !== 'revealed') return ref;
+    if (ref.index === r) return null;
+    return ref.index > r ? { ...ref, index: ref.index - 1 } : ref;
+  };
+  const next: MatchEvent[] = [];
+  for (let i = 0; i < valid.length; i++) {
+    if (i === k) continue;
+    const ev = valid[i];
+    if (ev.t === 'place') {
+      const card = shift(ev.card);
+      if (!card) return null;
+      next.push({ ...ev, card });
+    } else if (ev.t === 'swap') {
+      const theirs = shift(ev.theirs);
+      if (!theirs) return null;
+      next.push({ ...ev, theirs });
+    } else {
+      next.push(ev);
+    }
+  }
+  // 詰めた添字で全ての記録が再生できること(途中で切れるなら、どこかが別のカードを指している)
+  return replay(setup, next).applied === next.length ? next : null;
+}

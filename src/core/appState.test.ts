@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  EMPTY_DRAFT, INITIAL_STATE, applyNpc, changeRules, clearOppSlot, draftToSetup, parseAppState, restartMatch, revealPoolCard, setupWarnings, toggleRule,
+  EMPTY_DRAFT, INITIAL_STATE, applyNpc, changeRules, clearOppSlot, draftToSetup, parseAppState, restartMatch, revealPoolCard, setupWarnings, toTop, toggleRule,
   type AppState,
 } from './appState';
 import { replay } from './match';
+import { RULE_HELP, RULE_NAMES } from './rules';
 import type { CardDef } from './types';
 
 const c = (n: number): CardDef => ({ sides: [n, n, n, n], type: 0 });
@@ -15,6 +16,12 @@ describe('ルールの切り替え', () => {
     expect(toggleRule([12], 13)).toEqual([13]);
     expect(toggleRule([4], 6)).toEqual([4, 6]);
     expect(toggleRule([4, 6], 4)).toEqual([6]);
+  });
+});
+
+describe('ルールの説明', () => {
+  it('名前のある全てのルールに説明がある(空の吹き出しを出さない)', () => {
+    for (const id of Object.keys(RULE_NAMES)) expect(RULE_HELP[Number(id)]?.length ?? 0).toBeGreaterThan(0);
   });
 });
 
@@ -83,6 +90,19 @@ describe('保存と復元', () => {
     expect(partial.phase).toBe('setup');
     expect(partial.draft.myCards[0]).toEqual(c(1));
     expect(partial.draft.myCards[1]).toBeNull();
+  });
+});
+
+describe('トップは対局画面', () => {
+  it('対局中の記録は 1 件も消さず、手札が揃っていなければ設定画面のまま', () => {
+    const draft = { ...EMPTY_DRAFT, myCards: [c(1), c(2), c(3), c(4), c(5)] };
+    const playing: AppState = { phase: 'play', draft, setup: draftToSetup(draft), events: [{ t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 }] };
+    expect(toTop(playing)).toBe(playing);
+    const fresh = toTop({ ...INITIAL_STATE, draft });
+    expect(fresh.phase).toBe('play');
+    expect(fresh.setup!.myHand).toEqual(draft.myCards);
+    expect(fresh.events).toEqual([]);
+    expect(toTop(INITIAL_STATE).phase).toBe('setup');
   });
 });
 
