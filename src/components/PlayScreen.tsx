@@ -241,7 +241,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
         </div>
         <div className="match-nav">
           {inProgress ? (
-            <ConfirmAction className="btn-tertiary btn-sm" label={<><Icon name="back" />設定に戻る</>} confirmLabel="対局を閉じて戻る" onConfirm={onNewMatch} />
+            <ConfirmAction className="btn-tertiary btn-sm" small label={<><Icon name="back" />設定に戻る</>} confirmLabel="対局を閉じて戻る" onConfirm={onNewMatch} />
           ) : (
             <button type="button" className="btn-tertiary btn-sm" onClick={onNewMatch}>
               <Icon name="back" />設定に戻る

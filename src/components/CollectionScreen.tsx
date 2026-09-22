@@ -169,7 +169,7 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
       <div className="meter" role="progressbar" aria-label="所有率" aria-valuemin={0} aria-valuemax={CARDS.length} aria-valuenow={known.length} aria-valuetext={`${percent}%`}>
         <span style={{ width: `${percent}%` }} />
       </div>
-      <p className="note">ゲーム内の「カードリスト」と同じ並びです。持っているカードをタップしてください。ここで登録した手持ちから、対戦相手に合わせたデッキを探せます。カードにマウスを乗せると入手方法が出ます。</p>
+      <p className="note">ゲーム内のカードリストと同じ並びです。持っているカードをタップしてください。登録した手持ちから、対戦相手に合わせたデッキを探せます。</p>
 
       <section className="coll-achv" aria-label="アチーブメント">
         <h3>アチーブメント <span className="muted">達成 {achievedCount} / {achievements.length}</span></h3>
@@ -242,7 +242,8 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
         <p className="note">手持ちはこのブラウザにだけ保存されます。下の文字列を控えておけば、消えた時や別の端末で読み込めます。</p>
         <textarea readOnly value={exportCollection(collection)} rows={3} aria-label="手持ちの書き出し" onFocus={(e) => e.target.select()} />
         <button type="button" className="btn-tertiary" onClick={copy}>コピー</button>
-        <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={3} placeholder="控えた文字列、またはカード ID(例: 1-53,60,72)" aria-label="手持ちの読み込み" />
+        <label className="field-label" htmlFor="coll-import">読み込む文字列(控えた文字列か、カード ID をカンマ区切りで。例: 1-53,60,72)</label>
+        <textarea id="coll-import" value={importText} onChange={(e) => setImportText(e.target.value)} rows={3} placeholder="例: 1-53,60,72" />
         <div className="coll-row">
           <button type="button" className="btn btn-sm" disabled={importText.trim() === ''} onClick={() => runImport(false)}>今の手持ちに追加する</button>
           <button type="button" className="btn-danger btn-sm" disabled={importText.trim() === ''} onClick={() => runImport(true)}>今の手持ちと置き換える</button>

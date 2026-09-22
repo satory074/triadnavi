@@ -51,14 +51,23 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
       const wrap = next >= 0 ? next : myCards.indexOf(null);
       setTarget(wrap >= 0 ? { kind: 'my', slot: wrap } : null);
     } else if (target.kind === 'opp') {
+      const prev = draft.oppCards[target.slot];
       const oppCards = draft.oppCards.slice();
       oppCards[target.slot] = card;
-      // 候補にあるカードを手で入れた場合は、候補から外す
-      onDraft({ ...draft, oppCards, oppPool: draft.oppPool.filter((c) => !sameCard(c, card)) });
+      // 候補にあるカードを手で入れた場合は候補から外す。入れ替えで外れた NPC の可変カードは候補へ戻す
+      let oppPool = draft.oppPool.filter((c) => !sameCard(c, card));
+      if (prev && isNpcVariable(draft.npcId, prev) && !oppPool.some((c) => sameCard(c, prev))) oppPool = [...oppPool, prev];
+      onDraft({ ...draft, oppCards, oppPool });
       setTarget(null);
     } else {
       if (!draft.oppPool.some((c) => sameCard(c, card))) onDraft({ ...draft, oppPool: [...draft.oppPool, card].slice(0, 20) });
     }
+  };
+
+  const clearMy = (slot: number) => {
+    const myCards = draft.myCards.slice();
+    myCards[slot] = null;
+    onDraft({ ...draft, myCards });
   };
 
   const clearOpp = (slot: number) => {
@@ -83,9 +92,23 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
       </section>
 
       <section>
+        <h2>相手の手札</h2>
+        <OpponentPanel
+          draft={draft}
+          orderActive={rules.pick === 'order'}
+          onEditSlot={(slot) => setTarget({ kind: 'opp', slot })}
+          onClearSlot={clearOpp}
+          onReveal={(i) => onDraft(revealPoolCard(draft, i))}
+          onAddCandidate={() => setTarget({ kind: 'pool' })}
+          onRemoveCandidate={(i) => onDraft({ ...draft, oppPool: draft.oppPool.filter((_, k) => k !== i) })}
+          onPriorLevel={(priorLevel) => onDraft({ ...draft, priorLevel })}
+          onOrderKnown={(oppOrderKnown) => onDraft({ ...draft, oppOrderKnown })}
+        />
+      </section>
+
+      <section>
         <h2>この対戦のルール</h2>
         <RuleChips ruleIds={draft.ruleIds} onToggle={(id) => onDraft({ ...draft, ruleIds: toggleRule(draft.ruleIds, id) })} />
-        <p className="note">ルーレット、ランダムハンド、スワップ、ドラフトは、対戦が始まってから実際に決まったルールと手札を入れてください。</p>
         {rules.fallenAce && (rules.same || rules.plus) && (
           <label className="check">
             <input type="checkbox" checked={draft.fallenAceInCombo} onChange={(e) => onDraft({ ...draft, fallenAceInCombo: e.target.checked })} />
@@ -99,8 +122,12 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
         <div className="hand-row">
           {draft.myCards.map((card, i) => (
             <div className="slot" key={i}>
-              <CardView card={card} empty owner={0} onClick={() => setTarget({ kind: 'my', slot: i })} ariaLabel={`自分の ${i + 1} 枚目を入力`} />
-              <span className="slot-action">{card ? '変更' : '入力'}</span>
+              <CardView card={card} empty owner={0} onClick={() => setTarget({ kind: 'my', slot: i })} ariaLabel={card ? `自分の ${i + 1} 枚目を変更` : `自分の ${i + 1} 枚目を入力`} />
+              {card ? (
+                <button type="button" className="btn-tertiary slot-remove" onClick={() => clearMy(i)} aria-label={`自分の ${i + 1} 枚目を外す`}>外す</button>
+              ) : (
+                <span className="slot-action">入力</span>
+              )}
             </div>
           ))}
         </div>
@@ -116,27 +143,16 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
           onRename={(id, name) => onSaved(renameDeck(saved, id, name))}
           onDelete={(id) => onSaved({ ...saved, decks: saved.decks.filter((d) => d.id !== id) })}
         />
+      </section>
+
+      {/* 重い任意の機能なので、対戦相手・ルール・手札の後ろに畳んで置く */}
+      <section>
         <DeckAdvisor
           draft={draft}
           collection={collection}
           savedDecks={saved.decks}
           onUse={(cards) => onDraft({ ...draft, myCards: cards })}
           onOpenCollection={onOpenCollection}
-        />
-      </section>
-
-      <section>
-        <h2>相手の手札</h2>
-        <OpponentPanel
-          draft={draft}
-          orderActive={rules.pick === 'order'}
-          onEditSlot={(slot) => setTarget({ kind: 'opp', slot })}
-          onClearSlot={clearOpp}
-          onReveal={(i) => onDraft(revealPoolCard(draft, i))}
-          onAddCandidate={() => setTarget({ kind: 'pool' })}
-          onRemoveCandidate={(i) => onDraft({ ...draft, oppPool: draft.oppPool.filter((_, k) => k !== i) })}
-          onPriorLevel={(priorLevel) => onDraft({ ...draft, priorLevel })}
-          onOrderKnown={(oppOrderKnown) => onDraft({ ...draft, oppOrderKnown })}
         />
       </section>
 

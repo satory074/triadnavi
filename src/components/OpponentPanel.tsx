@@ -28,8 +28,12 @@ export function OpponentPanel({ draft, orderActive, onEditSlot, onClearSlot, onR
       <div className="hand-row">
         {draft.oppCards.map((card, i) => (
           <div className="slot" key={i}>
-            <CardView card={card} owner={1} onClick={() => (card ? onClearSlot(i) : onEditSlot(i))} ariaLabel={card ? `相手の ${i + 1} 枚目を外す` : `相手の ${i + 1} 枚目を入力`} />
-            <span className="slot-action">{card ? '外す' : '入力'}</span>
+            <CardView card={card} owner={1} onClick={() => onEditSlot(i)} ariaLabel={card ? `相手の ${i + 1} 枚目を変更` : `相手の ${i + 1} 枚目を入力`} />
+            {card ? (
+              <button type="button" className="btn-tertiary slot-remove" onClick={() => onClearSlot(i)} aria-label={`相手の ${i + 1} 枚目を外す`}>外す</button>
+            ) : (
+              <span className="slot-action">入力</span>
+            )}
           </div>
         ))}
       </div>
@@ -42,7 +46,7 @@ export function OpponentPanel({ draft, orderActive, onEditSlot, onClearSlot, onR
           <h3>不明なカードの候補</h3>
           {draft.oppPool.length > 0 ? (
             <>
-              <p className="note">{hasNpc ? 'この NPC が残りの枠に入れるカードです。' : ''}手札に見えているカードはタップすると手札へ移ります。</p>
+              <p className="note">{hasNpc ? 'この NPC が残りの枠に入れるカードです。' : ''}見えているカードは、タップで手札へ移せます。</p>
               <div className="pool-row">
                 {draft.oppPool.map((card, i) => (
                   <div className="slot" key={i}>

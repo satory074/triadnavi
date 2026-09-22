@@ -9,6 +9,8 @@ interface Props {
   /** 1 回目のボタンの class(既定は赤い枠の .btn-danger) */
   className?: string;
   disabled?: boolean;
+  /** 文の中に置く小さい版(確認と「やめる」も小さくする) */
+  small?: boolean;
   /** 放っておいて元に戻るまで(ms) */
   timeoutMs?: number;
   'aria-label'?: string;
@@ -21,7 +23,8 @@ const DOUBLE_CLICK_GUARD_MS = 350;
  * 取り消せない操作の 2 段階ボタン。1 回目で「[confirmLabel] [やめる]」に変わり、放っておくと元に戻る。
  * window.confirm は自動操作を止め、見た目も選べないので使わない。
  */
-export function ConfirmAction({ label, confirmLabel, onConfirm, className = 'btn-danger', disabled, timeoutMs = 4000, 'aria-label': ariaLabel }: Props) {
+export function ConfirmAction({ label, confirmLabel, onConfirm, className = 'btn-danger', disabled, small, timeoutMs = 4000, 'aria-label': ariaLabel }: Props) {
+  const sm = small ? ' btn-sm' : '';
   const [armed, setArmed] = useState(false);
   const armedAt = useRef(0);
   const confirmRef = useRef<HTMLButtonElement>(null);
@@ -54,7 +57,7 @@ export function ConfirmAction({ label, confirmLabel, onConfirm, className = 'btn
       <button
         ref={confirmRef}
         type="button"
-        className="btn-danger"
+        className={`btn-danger${sm}`}
         onClick={() => {
           if (Date.now() - armedAt.current < DOUBLE_CLICK_GUARD_MS) return;
           setArmed(false);
@@ -63,7 +66,7 @@ export function ConfirmAction({ label, confirmLabel, onConfirm, className = 'btn
       >
         {confirmLabel}
       </button>
-      <button type="button" className="btn-tertiary" onClick={() => setArmed(false)}>やめる</button>
+      <button type="button" className={`btn-tertiary${sm}`} onClick={() => setArmed(false)}>やめる</button>
     </span>
   );
 }

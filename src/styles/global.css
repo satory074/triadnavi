@@ -100,11 +100,23 @@ p {
 /* ---- ヘッダー/フッター ---- */
 .site-head {
   display: flex;
-  align-items: baseline;
-  gap: 0.7rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.7rem;
   padding-bottom: 0.6rem;
   margin-bottom: 0.8rem;
   border-bottom: 1px solid var(--mat-line);
+}
+
+/* ヘッダーのボタン。折り返さず、入らなければまとめて 2 行目の右端へ */
+.site-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.site-actions button {
+  white-space: nowrap;
 }
 
 .site-head h1 {
@@ -483,9 +495,38 @@ input:not([type]) {
 
 .npc-line {
   display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
   font-size: var(--fs-md);
+}
+
+/* 「変更」で今の NPC の下に出る検索欄 */
+.npc-selected .npc-picker {
+  margin: 0.5rem 0 0.7rem;
+}
+
+/* ルールの選択。独立のチップと、排他の 3 組のセグメント */
+.rule-picker {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.rule-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.rule-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.rule-group-label {
+  font-size: var(--fs-sm);
+  color: var(--paper-dim);
 }
 
 .decks {
@@ -529,10 +570,23 @@ input:not([type]) {
   align-items: center;
 }
 
-.deck-save input,
-.deck-rename input {
+.deck-save {
+  align-items: flex-end;
+}
+
+.deck-save-field {
   flex: 1;
   min-width: 0;
+}
+
+.deck-save input,
+.deck-rename input {
+  width: 100%;
+  min-width: 0;
+}
+
+.deck-rename input {
+  flex: 1;
 }
 
 /* 名前を変更中の行。読み込みボタンと同じ高さに収める */
@@ -584,10 +638,26 @@ input:not([type]) {
 }
 
 /* ---- デッキの評価と提案 ---- */
-.advisor {
-  margin-top: 1rem;
-  padding-top: 0.2rem;
-  border-top: 1px solid var(--mat-line);
+/* 重い任意の機能なので <details> に畳む。探索中は開いたまま */
+.advisor summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.advisor summary h3 {
+  display: inline;
+  margin: 0;
+}
+
+/* 結果の後ろの前提と注意。畳んでおく */
+.fineprint {
+  margin-top: 0.6rem;
+}
+
+.fineprint summary {
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  color: var(--paper-dim);
 }
 
 .advisor-actions {
@@ -972,6 +1042,14 @@ textarea {
   text-align: center;
   font-size: var(--fs-xs);
   color: var(--paper-dim);
+}
+
+/* 札の下の「外す」。札のタップは「変更」なので、外す操作は別の小さなボタンにする(札の幅いっぱいには広げない) */
+.slot-remove {
+  align-self: center;
+  min-height: 1.9rem;
+  padding: 0.1rem 0.6rem;
+  font-size: var(--fs-xs);
 }
 
 .card {

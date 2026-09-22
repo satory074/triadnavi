@@ -51,6 +51,8 @@ function asDeckCards(cards: readonly CardDef[]): DeckCard[] {
  */
 export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollection }: Props) {
   const [run, setRun] = useState<Run | null>(null);
+  // 畳んだままにできるが、探索中は開いたままにする(閉じると進み具合が見えなくなる)
+  const [open, setOpen] = useState(false);
   const { search, running, error, stop } = useDeckSearch(run?.request ?? null);
 
   const npc = draft.npcId === null ? undefined : npcById(draft.npcId);
@@ -76,8 +78,8 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
   const top = search && run && !stale ? topDecks(search) : [];
 
   return (
-    <div className="advisor">
-      <h3>デッキの評価と提案</h3>
+    <details className="advisor" open={open || running} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary><h3>デッキの評価と提案</h3></summary>
       {blocked ? (
         <p className="note">対戦相手の NPC を選ぶか、相手のカード(または候補)を入れると、デッキを評価できます。</p>
       ) : (
@@ -141,13 +143,16 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
             />
           ))}
 
-          <p className="note">{deckKindNote(run.kind)}</p>
-          {matchupCautions(matchup, npc?.usesRegional ?? false).map((t) => (
-            <p className="note" key={t}>{t}</p>
-          ))}
+          <details className="fineprint">
+            <summary>前提と注意</summary>
+            <p className="note">{deckKindNote(run.kind)}</p>
+            {matchupCautions(matchup, npc?.usesRegional ?? false).map((t) => (
+              <p className="note" key={t}>{t}</p>
+            ))}
+          </details>
         </div>
       )}
-    </div>
+    </details>
   );
 }
 

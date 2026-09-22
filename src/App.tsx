@@ -49,12 +49,14 @@ export default function App() {
       <header className="site-head">
         <h1><a href={import.meta.env.BASE_URL} className="site-logo" onClick={goTop}>triadnavi</a></h1>
         <p className="tagline">トリプルトライアドの次の一手</p>
-        {!playing && (
-          <button type="button" className={`btn${collecting ? ' is-on' : ''}`} aria-pressed={collecting} onClick={() => setCollecting(!collecting)}>
-            {ownedCount > 0 ? `手持ち ${ownedCount} 枚` : '手持ちを登録'}
-          </button>
-        )}
-        <button type="button" className="btn-tertiary" onClick={() => setHelp(true)}>保証できること</button>
+        <div className="site-actions">
+          {!playing && (
+            <button type="button" className={`btn${collecting ? ' is-on' : ''}`} aria-pressed={collecting} onClick={() => setCollecting(!collecting)}>
+              {ownedCount > 0 ? `手持ち ${ownedCount} 枚` : '手持ちを登録'}
+            </button>
+          )}
+          <button type="button" className="btn-tertiary" onClick={() => setHelp(true)}>保証できること</button>
+        </div>
       </header>
 
       {collecting && !playing ? (

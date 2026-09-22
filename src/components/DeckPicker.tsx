@@ -66,7 +66,10 @@ export function DeckPicker({ decks, current, onLoad, onSave, onRename, onDelete 
             setName('');
           }}
         >
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="デッキ名" aria-label="デッキ名" maxLength={DECK_NAME_MAX} />
+          <div className="deck-save-field">
+            <label className="field-label" htmlFor="deck-name">デッキ名(空なら自動で付けます)</label>
+            <input id="deck-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={`デッキ ${decks.length + 1}`} maxLength={DECK_NAME_MAX} />
+          </div>
           <button type="submit" className="btn btn-sm">今の手札を保存</button>
         </form>
       )}
