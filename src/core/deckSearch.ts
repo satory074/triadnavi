@@ -483,6 +483,8 @@ export interface DeckSearchProgress {
   generationDone: number;
   generationTotal: number;
   complete: boolean;
+  /** 進み具合(0〜1)。deckSearchRatio を見よ */
+  ratio: number;
 }
 
 export function deckSearchProgress(s: DeckSearch): DeckSearchProgress {
@@ -495,7 +497,79 @@ export function deckSearchProgress(s: DeckSearch): DeckSearchProgress {
     generationDone: g.superset ? 0 : g.decks.filter((k) => s.evals[k].pruned || isComplete(s, s.evals[k], g.set)).length,
     generationTotal: g.decks.length,
     complete: s.phase === 'done',
+    ratio: deckSearchRatio(s),
   };
+}
+
+/**
+ * climb のデッキ 1 つにかかる計算の、全シナリオを最後まで調べる場合(出発点のデッキ)に対する割合の見込み。
+ * 今のデッキを上回れないと分かった時点で打ち切るので軽い。ブラウザの実測(イソベ = プラス・スワップ、手持ち 200 枚)で、
+ * 出発点 6 個に 41 秒、climb 240 個に約 320 秒だった(1 個あたり出発点の 0.2〜0.35 倍。今のデッキが強くなる後半ほど軽い)
+ */
+const CLIMB_COST = 0.3;
+
+const resolved = (t: Tally | undefined) => (t ? t.value.filter((v) => v !== undefined).length : 0);
+
+/**
+ * 進み具合(0〜1)。各段階に見込みの計算量(シナリオを最後まで調べる回数)で持ち分を割り振り、段階の中は片付いた割合で進める:
+ *   seeds   出発点の数 × シナリオ数。片付いたシナリオの割合
+ *   climb   予算(maxDecks)× シナリオ数 × CLIMB_COST。片付いたデッキ(打ち切りを含む)の数 ÷ 予算
+ *   refine  keep × 測り直しのシナリオ数。片付いたシナリオの割合
+ *   certify keep × 2(先攻/後攻)。済んだ上位集合の探りの割合
+ * 段階が早く終わった時(全勝のデッキが見つかった、行き止まり、測り直しが要らない)は、残りの持ち分を飛ばして先へ進む。
+ * 後戻りはせず、完了した時だけ 1 になる。
+ */
+export function deckSearchRatio(s: DeckSearch): number {
+  if (s.phase === 'done') return 1;
+  const o = s.options;
+  const n = s.scenarios.length;
+  const share: Record<Exclude<SearchPhase, 'done'>, number> = {
+    seeds: s.seeds.length * n,
+    climb: o.climb && o.maxDecks > 0 ? o.maxDecks * n * CLIMB_COST : 0,
+    refine: s.refineScenarios ? o.keep * s.refineScenarios.length : 0,
+    certify: s.supersetOk ? o.keep * 2 : 0,
+  };
+  const phases = ['seeds', 'climb', 'refine', 'certify'] as const;
+  const total = phases.reduce((a, p) => a + share[p], 0);
+  if (total === 0) return 0;
+  let passed = 0;
+  for (const p of phases) {
+    if (p === s.phase) break;
+    passed += share[p];
+  }
+  return (passed + share[s.phase] * phaseFraction(s)) / total;
+}
+
+/** 今の段階の中での進み具合(0〜1) */
+function phaseFraction(s: DeckSearch): number {
+  const g = s.generation;
+  const n = s.scenarios.length;
+  const ratio = (done: number, all: number) => (all === 0 ? 1 : done / all);
+  switch (s.phase) {
+    case 'seeds':
+      return ratio(g.decks.reduce((a, k) => a + resolved(s.evals[k].tally), 0), g.decks.length * n);
+    case 'climb': {
+      // 打ち切ったデッキは片付いた 1 個、調べている途中のデッキは片付いたシナリオの割合で数える。
+      // 最後の世代は予算を少し超えることがあるので、超えた分は数えない(1 で止める)
+      const current = g.decks.reduce((a, k) => a + (s.evals[k].pruned ? 1 : ratio(resolved(s.evals[k].tally), n)), 0);
+      return Math.min(1, (s.climbDecks + current) / s.options.maxDecks);
+    }
+    case 'refine':
+      return ratio(g.decks.reduce((a, k) => a + resolved(s.evals[k].refined), 0), g.decks.length * (s.refineScenarios?.length ?? 0));
+    case 'certify': {
+      let done = 0;
+      let all = 0;
+      for (const k of g.decks) {
+        const e = s.evals[k];
+        const d = Object.keys(e.superset).length;
+        done += d;
+        all += d + supersetTasks(s, e).length;
+      }
+      return ratio(done, all);
+    }
+    default:
+      return 1;
+  }
 }
 
 /** 見つかった中で良い順。測り直したデッキ同士は測り直した点で、それ以外は探索中の点で比べる */

@@ -175,10 +175,55 @@ export function applyResult(a: Analysis, r: TaskResult): Analysis {
   }
 }
 
-export function progress(a: Analysis): { done: number; total: number; complete: boolean } {
+export function progress(a: Analysis): { done: number; total: number; complete: boolean; ratio: number } {
   const ids = new Set(Object.keys(a.tasks));
   for (const t of plan(a)) ids.add(t.id);
   let done = 0;
   for (const id of ids) if (a.tasks[id] === 'done') done++;
-  return { done, total: ids.size, complete: ids.size > 0 && done === ids.size };
+  return { done, total: ids.size, complete: ids.size > 0 && done === ids.size, ratio: progressRatio(a) };
+}
+
+/**
+ * タスク 1 件の重み(分類 1 件を 1 とした計算量の目安)。空の盤面からの実測で、負けや引き分けの手の
+ * 「相手の応手のうち何通りで勝ちが確定するか」は分類の 2〜39 倍(中央値 3.5 倍)、それ以外は 0.1〜1.4 倍だった
+ */
+const MISTAKES_WEIGHT = 4;
+
+function taskWeight(a: Analysis, id: string): number {
+  if (id === 'chaosExact') return a.moves.length;
+  return id.startsWith('e:') ? MISTAKES_WEIGHT : 1;
+}
+
+/**
+ * 進み具合(0〜1)。済んだ計算量 ÷ (済んだ計算量 + 残りの計算量の上限)。
+ * done / total をそのまま使うと、分類が終わった所で同点の手の順位付けのタスクが加わり、分母が増えて後戻りする。
+ * 分類が済んでいない手は「この後に来うる最も重いタスク」まで残りに数えておき、分かった分だけ減らすので、後戻りしない
+ * (分類の結果で先の計画が軽くなった時は前へ飛ぶ)。完了した時だけ 1 になる。
+ */
+export function progressRatio(a: Analysis): number {
+  let done = 0;
+  for (const [id, st] of Object.entries(a.tasks)) if (st === 'done') done += taskWeight(a, id);
+  let left = 0;
+  const open = (id: string) => (a.tasks[id] === 'done' ? 0 : taskWeight(a, id));
+
+  if (a.kind === 'chaos' || a.kind === 'estimate' || a.moves.every((m) => m.cls !== undefined)) {
+    // 計画がもう変わらない: カオスと推定は最初から、それ以外は全ての手の分類が済んだ後(段階 2・3 は分類の結果だけで決まる)
+    for (const t of plan(a)) left += open(t.id);
+  } else {
+    const anyWin = a.moves.some((m) => m.cls === 'win');
+    const top = topClass(a);
+    // 最上位クラスの手に付く順位付け。勝ちなら枚数差(margin)、そうでなければ応手の数え上げか、世界ごとの解き直し
+    const member = a.kind === 'exact' ? MISTAKES_WEIGHT : a.worldCount;
+    for (const m of a.moves) {
+      const k = mv(m.move);
+      left += open(`c:${k}`);
+      if (m.cls === undefined) left += anyWin ? 1 : Math.max(member, 1);
+      else if (m.cls === 'win') left += open(`m:${k}`);
+      else if (m.cls === 'notWin') left += open(`d:${k}`);
+      // 引き分け/負けの手: 最上位クラスはこの先上がることしかないので、今の最上位と同じ時だけ順位付けが残りうる
+      else if (!anyWin && m.cls === top) left += member;
+    }
+  }
+  const total = done + left;
+  return total === 0 ? 0 : done / total;
 }

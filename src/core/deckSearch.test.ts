@@ -3,7 +3,7 @@ import { isLegalDeck, type DeckCard } from './collection';
 import { makeScenarios, positionValue, scenarioPosition, type DeckContext, type DeckTask, type DeckTaskResult, type Matchup } from './deckEval';
 import { buildPools, deckKey, neighbours, seedDecks } from './deckPool';
 import {
-  DEFAULT_SEARCH_OPTIONS, compareScores, createDeckSearch, deckScore, deckSearchProgress, isComplete, nextDeckTasks, runDeckSearchSync, topDecks,
+  DEFAULT_SEARCH_OPTIONS, applyDeckResult, compareScores, createDeckSearch, deckScore, deckSearchProgress, isComplete, markDeckIssued, nextDeckTasks, runDeckSearchSync, topDecks,
   type DeckSearch, type DeckSearchOptions,
 } from './deckSearch';
 import { makeRng, type Rng } from './rng';
@@ -228,6 +228,43 @@ describe('デッキの探索', () => {
     expect(best.tally.value).toEqual(values);
     expect(deckScore(s, best).win).toBeCloseTo(set.scenarios.reduce((a, sc, i) => a + (values[i] >= 1 ? sc.weight : 0), 0));
   }, 60_000);
+
+  it('進み具合は後戻りせず、探索が終わった時だけ 100% になる(打ち切り・予算・測り直し・保証の確認・評価だけ、のどれでも)', () => {
+    const cases: [Fixture, Partial<DeckSearchOptions>, number][] = [
+      [fixture(21), {}, -40],
+      // 世代 6 個ずつなので、最後の世代が予算 10 を 2 個はみ出す
+      [fixture(22), { maxDecks: 10 }, -40],
+      [fixture(23), {}, 60],
+      [fixture(24, { swap: true }, true), { keep: 2 }, -40],
+      [fixture(25, { ruleIds: [8] }, false, true), { maxDecks: 30 }, -40],
+      [fixture(26), { climb: false }, -40],
+    ];
+    const reasons = new Set<string>();
+    cases.forEach(([f, options, bias], k) => {
+      const r = makeRng(300 + k);
+      const run = synthetic(bias);
+      let s = f.start(options);
+      let last = deckSearchProgress(s).ratio;
+      for (;;) {
+        const tasks = nextDeckTasks(s, 1 + Math.floor(r() * 6));
+        if (tasks.length === 0) break;
+        s = markDeckIssued(s, tasks);
+        const results = tasks.map(run);
+        while (results.length > 0) {
+          s = applyDeckResult(s, results.splice(Math.floor(r() * results.length), 1)[0]);
+          const p = deckSearchProgress(s);
+          expect(p.ratio, `case ${k} phase=${s.phase}`).toBeGreaterThanOrEqual(last - 1e-12);
+          if (!p.complete) expect(p.ratio).toBeLessThan(1);
+          last = p.ratio;
+        }
+      }
+      expect(s.phase).toBe('done');
+      expect(deckSearchProgress(s).ratio).toBe(1);
+      reasons.add(s.stopReason!);
+    });
+    // 早く終わる場合(全勝・行き止まり)と、予算を使い切る場合の両方を通っている
+    expect([...reasons].sort()).toEqual(['budget', 'evaluated', 'exhausted', 'perfect']);
+  });
 
   it('出発点が無ければ、何もせず終わる', () => {
     const f = fixture(16);

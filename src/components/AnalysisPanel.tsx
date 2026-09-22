@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CELL_NAMES } from '../core/geometry';
-import { KIND_LABEL, classLabel, headline, rankedMoves, recommended, secondaryText } from '../core/rank';
+import { KIND_LABEL, classLabel, headline, progressPercent, rankedMoves, recommended, secondaryText } from '../core/rank';
 import type { MoveEval } from '../core/scheduler';
 import { formatSides, type CardDef } from '../core/types';
 import type { SolverState } from '../hooks/useSolver';
@@ -56,7 +56,7 @@ export function AnalysisPanel({ solver, cards, onApply }: Props) {
 
       {!solver.complete && solver.total > 0 && (
         <p className="progress">
-          <progress value={solver.done} max={solver.total} /> 計算中 {solver.done} / {solver.total}(おすすめは、より良い手が見つかった時だけ変わります)
+          <progress value={solver.ratio} aria-label="計算の進み具合" /> 計算中 {progressPercent(solver.ratio)}%(おすすめは、より良い手が見つかった時だけ変わります)
         </p>
       )}
 

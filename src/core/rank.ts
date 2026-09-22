@@ -94,6 +94,11 @@ export function percent(x: number): string {
   return `${Math.round(x * 100)}%`;
 }
 
+/** 計算の進み具合(0〜1)を整数の % にする。切り捨てなので、終わる前に 100 と出ることはない */
+export function progressPercent(ratio: number): number {
+  return Math.floor(ratio * 100);
+}
+
 /** 各手に添える副指標の文言(各手に出す数字は、保証クラスとこれの 2 つまで) */
 export function secondaryText(m: MoveEval, a: Analysis): string {
   if (a.kind === 'chaos') {

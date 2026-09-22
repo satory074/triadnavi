@@ -71,10 +71,7 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
   const known = useMemo(() => ownedCards(collection), [collection]);
   const percent = ownershipPercent(known.length);
   const achievements = useMemo(() => achievementStatus(known), [known]);
-  const achieved = achievements.filter((a) => a.done);
-  // 枚数のアチーブメントは昇順に並んでいるので、最初の未達成が次の目標
-  const nextCount = achievements.find((a) => 'count' in a.achievement && !a.done);
-  const openRanges = achievements.filter((a) => !('count' in a.achievement) && !a.done);
+  const achievedCount = achievements.filter((a) => a.done).length;
 
   const shown = useMemo(() => {
     const q = normalize(query);
@@ -175,20 +172,23 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
       <p className="note">ゲーム内の「カードリスト」と同じ並びです。持っているカードをタップしてください。ここで登録した手持ちから、対戦相手に合わせたデッキを探せます。カードにマウスを乗せると入手方法が出ます。</p>
 
       <section className="coll-achv" aria-label="アチーブメント">
-        <h3>達成したアチーブメント</h3>
-        {achieved.length > 0 ? (
-          <ul className="achv-list">
-            {achieved.map((a) => (
-              <li key={a.achievement.id} className="achv" title={achievementCondition(a)}>{a.achievement.name}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className="muted">まだありません</p>
-        )}
-        {nextCount && <p className="note">次は「{nextCount.achievement.name}」: あと {nextCount.need - nextCount.have} 種類({achievementCondition(nextCount)})</p>}
-        {openRanges.map((a) => (
-          <p className="note" key={a.achievement.id}>「{a.achievement.name}」({achievementCondition(a)}): {a.have} / {a.need} 枚</p>
-        ))}
+        <h3>アチーブメント <span className="muted">達成 {achievedCount} / {achievements.length}</span></h3>
+        <ul className="achv-list">
+          {achievements.map((a) => (
+            <li key={a.achievement.id} className={`achv${a.done ? ' is-done' : ''}`}>
+              <span className="achv-name">{a.achievement.name}</span>
+              <span className="achv-cond">{achievementCondition(a)}</span>
+              {a.done ? (
+                <span className="achv-count">達成</span>
+              ) : (
+                <>
+                  <span className="achv-count">{a.have} / {a.need}(あと {a.need - a.have})</span>
+                  <span className="achv-meter" aria-hidden="true"><span style={{ width: `${(100 * a.have) / a.need}%` }} /></span>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
         <p className="note">ここで登録した手持ちから判定しています。ゲーム内の達成状況とは、登録が漏れている分だけずれます。</p>
       </section>
 

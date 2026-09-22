@@ -5,7 +5,7 @@ import { matchupKey, matchupProblems, type DeckContext, type DeckEvalKind } from
 import { DECK_KIND_LABEL, deckKindNote, deckLines, matchupCautions, scenarioSummary, stopReasonText, variantRows } from '../core/deckRank';
 import { deckSearchProgress, prepareDeckSearch, topDecks, type DeckEval, type DeckSearch, type SearchPhase } from '../core/deckSearch';
 import type { SavedDeck } from '../core/presets';
-import { percent } from '../core/rank';
+import { percent, progressPercent } from '../core/rank';
 import type { CardDef } from '../core/types';
 import { CARDS, npcById, ownedCards, resolveDeck, toDeckCard } from '../data';
 import { useDeckSearch, type DeckSearchRequest } from '../hooks/useDeckSearch';
@@ -105,16 +105,27 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
             <span className="muted">{scenarioSummary(matchup, run.context.set)}</span>
           </div>
           {running ? (
-            <p className="progress" role="status">
-              {PHASE_TEXT[progress.phase]}… 評価したデッキ {progress.decksDone}
-              {progress.decksPruned > 0 && `(ほかに ${progress.decksPruned} 個を途中で打ち切り)`}
-              <button type="button" className="btn-quiet" onClick={stop}>止める</button>
-            </p>
+            <div className="search-progress">
+              <div className="search-progress-bar">
+                <progress value={progress.ratio} aria-label="探索の進み具合" />
+                <strong className="search-progress-pct">{progressPercent(progress.ratio)}%</strong>
+                <button type="button" className="btn-quiet" onClick={stop}>止める</button>
+              </div>
+              <p className="progress" role="status">
+                {PHASE_TEXT[progress.phase]}… 評価したデッキ {progress.decksDone}
+                {progress.decksPruned > 0 && `(ほかに ${progress.decksPruned} 個を途中で打ち切り)`}
+              </p>
+              {run.mode !== 'evaluate' && (
+                <p className="note">
+                  % は、入れ替えたデッキを上限の {search.options.maxDecks} 個まで調べる場合の目安です。全ての状況で勝てるデッキが見つかった時や、入れ替えても良くならなくなった時は、途中で先へ進みます。
+                </p>
+              )}
+            </div>
           ) : top.length === 0 && run.mode !== 'evaluate' ? (
             <p className="note note-warn" role="status">手持ちからデッキを組めませんでした。★4 以上ばかりの時は、★3 以下のカードも登録してください。</p>
           ) : (
             <p className="note" role="status">
-              {progress.complete ? stopReasonText(search.stopReason) : '途中で止めました。ここまでに見つかった中で最良のデッキです。'}
+              {progress.complete ? stopReasonText(search.stopReason) : `途中で止めました(進み具合 ${progressPercent(progress.ratio)}% の時点)。ここまでに見つかった中で最良のデッキです。`}
               {run.mode !== 'evaluate' && ` 調べたデッキ: ${progress.decksDone + progress.decksPruned}`}
             </p>
           )}

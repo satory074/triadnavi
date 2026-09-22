@@ -49,6 +49,18 @@ function randomPosition(r: Rng, rules: Partial<RuleSet>, k: number): Position {
   };
 }
 
+/** 相手の手札のうち known 枚だけを見せ、残りを候補リスト(extra 枚の偽物を混ぜる)に隠す */
+function hidePool(pos: Position, r: Rng, known: number, extra: number): Position {
+  const opp = pos.oppKnown;
+  const cards = pos.cards.slice();
+  const pool = opp.slice(known);
+  for (let i = 0; i < extra; i++) {
+    cards.push(randomCard(r, [1, 2, 3, 9, 10]));
+    pool.push(cards.length - 1);
+  }
+  return { ...pos, cards, oppKnown: opp.slice(0, known), oppPool: pool, oppUnknown: opp.length - known };
+}
+
 const worldOpts = (seed: number): WorldOptions => ({
   rng: makeRng(seed),
   maxEnumerate: 30,
@@ -129,6 +141,40 @@ describe('スケジューラ', () => {
     }
   });
 
+  it('進み具合は後戻りせず、全てのタスクが終わった時だけ 100% になる(複数同時に配り、結果は順不同で届く)', () => {
+    const r = makeRng(71);
+    const kinds = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      const base = randomPosition(r, { same: r() < 0.5, plus: r() < 0.5 }, 3 + (i % 4));
+      const pos: Position =
+        i % 4 === 1 ? hidePool(base, r, 1, 2)
+        : i % 4 === 2 ? { ...base, oppKnown: [], oppPool: [], oppUnknown: base.oppKnown.length }
+        : i % 4 === 3 ? { ...base, rules: { ...base.rules, pick: 'chaos' }, forcedCard: base.myHand[0] }
+        : base;
+      kinds.add(guaranteeKind(pos));
+      const worlds = guaranteeKind(pos) === 'chaos' ? [] : makeWorlds(pos, worldOpts(i));
+      const ctx = createContext(pos, worlds);
+      let a = startAnalysis(pos, worlds);
+      let last = progress(a).ratio;
+      for (;;) {
+        const batch = nextTasks(a, 1 + Math.floor(r() * 4));
+        if (batch.length === 0) break;
+        a = markIssued(a, batch);
+        const results = batch.map((t) => runTask(ctx, t));
+        while (results.length > 0) {
+          a = applyResult(a, results.splice(Math.floor(r() * results.length), 1)[0]);
+          const p = progress(a);
+          expect(p.ratio).toBeGreaterThanOrEqual(last - 1e-12);
+          if (!p.complete) expect(p.ratio).toBeLessThan(1);
+          last = p.ratio;
+        }
+      }
+      expect(progress(a).complete).toBe(true);
+      expect(progress(a).ratio).toBe(1);
+    }
+    expect([...kinds].sort()).toEqual(['chaos', 'estimate', 'exact', 'pool']);
+  });
+
   it('勝ちの手が見つかった後は「勝ちかどうか」だけを調べ、最後に表示用の分類を埋める', () => {
     const r = makeRng(41);
     let sawWinOnly = false;
@@ -154,17 +200,6 @@ describe('スケジューラ', () => {
 });
 
 describe('非公開手札の解析', () => {
-  function hidePool(pos: Position, r: Rng, known: number, extra: number): Position {
-    const opp = pos.oppKnown;
-    const cards = pos.cards.slice();
-    const pool = opp.slice(known);
-    for (let i = 0; i < extra; i++) {
-      cards.push(randomCard(r, [1, 2, 3, 9, 10]));
-      pool.push(cards.length - 1);
-    }
-    return { ...pos, cards, oppKnown: opp.slice(0, known), oppPool: pool, oppUnknown: opp.length - known };
-  }
-
   it('候補リストがあれば保証クラスを出し、最上位が勝ち以外なら具体的な手札を全列挙して集計する', () => {
     const r = makeRng(43);
     let tallied = 0;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type MouseEvent } from 'react';
 import { changeRules, draftToSetup, parseAppState, restartMatch, type AppState } from './core/appState';
 import { parseCollection } from './core/collection';
 import { parsePrefs } from './core/prefs';
@@ -23,6 +23,19 @@ export default function App() {
   // 手持ちの画面の見出し(所持 N / 475 枚)と同じ数え方でないと食い違うので、ownedCards を通す
   const ownedCount = useMemo(() => ownedCards(collection).length, [collection]);
 
+  // 対局の記録を閉じて対戦前の画面へ(設定の下書きは残る)
+  const toSetup = () => setApp((s) => ({ ...s, phase: 'setup', setup: null, events: [] }));
+
+  // ロゴ = 対戦前の画面へ。対局中なら「設定に戻る」と同じ
+  const goTop = (e: MouseEvent<HTMLAnchorElement>) => {
+    // 新しいタブで開く操作(Ctrl/⌘ + クリック、中クリック)はブラウザに任せる
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    setCollecting(false);
+    if (app.phase !== 'setup') toSetup();
+    window.scrollTo(0, 0);
+  };
+
   const start = () => {
     const setup = draftToSetup(app.draft);
     if (setup) setApp({ ...app, phase: 'play', setup, events: [] });
@@ -31,7 +44,7 @@ export default function App() {
   return (
     <CardArtContext value={prefs.cardArt}>
       <header className="site-head">
-        <h1>triadnavi</h1>
+        <h1><a href={import.meta.env.BASE_URL} className="site-logo" onClick={goTop}>triadnavi</a></h1>
         <p className="tagline">トリプルトライアドの次の一手</p>
         {!playing && (
           <button type="button" className={`btn${collecting ? ' is-on' : ''}`} aria-pressed={collecting} onClick={() => setCollecting(!collecting)}>
@@ -51,7 +64,7 @@ export default function App() {
           saved={saved}
           onEvents={(events) => setApp((s) => ({ ...s, events }))}
           onRematch={(setup) => setApp((s) => ({ ...s, setup, events: [] }))}
-          onNewMatch={() => setApp((s) => ({ ...s, phase: 'setup', setup: null, events: [] }))}
+          onNewMatch={toSetup}
           // 下書きにも書いておくと、「はじめから」の後も直前に選んだ先攻のまま始まる
           onFirst={(first) => setApp((s) => ({ ...s, draft: { ...s.draft, first }, setup: s.setup && { ...s.setup, first } }))}
           onRestart={() => setApp(restartMatch)}

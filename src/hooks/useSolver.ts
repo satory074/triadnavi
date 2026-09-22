@@ -8,13 +8,14 @@ import type { WorkerRequest, WorkerResponse } from '../worker/protocol';
 
 export interface SolverState {
   analysis: Analysis | null;
-  done: number;
+  /** 進み具合(0〜1)。後戻りせず、完了した時だけ 1 になる(scheduler.ts の progressRatio) */
+  ratio: number;
   total: number;
   complete: boolean;
   error: string | null;
 }
 
-const IDLE: SolverState = { analysis: null, done: 0, total: 0, complete: false, error: null };
+const IDLE: SolverState = { analysis: null, ratio: 0, total: 0, complete: false, error: null };
 
 function workerCount(): number {
   const hc = typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 2;
@@ -65,7 +66,7 @@ export function useSolver(position: Position | null, worlds: World[]): SolverSta
         frame = 0;
         if (cancelled) return;
         const p = progress(analysis);
-        setState({ analysis, done: p.done, total: p.total, complete: p.complete, error: null });
+        setState({ analysis, ratio: p.ratio, total: p.total, complete: p.complete, error: null });
       }, 40);
     };
 

@@ -106,6 +106,18 @@ p {
   color: var(--gilt);
 }
 
+/* ロゴは対戦前の画面へのリンク。見た目は見出しのまま、乗せた時だけ下線で押せると分かるようにする */
+.site-logo {
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-logo:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
 .tagline {
   margin: 0;
   color: var(--paper-dim);
@@ -607,28 +619,73 @@ input:not([type]) {
   margin-top: 0.7rem;
 }
 
+.coll-achv h3 .muted {
+  margin-left: 0.4rem;
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
+/* 達成・未達成を同じ並び(achievements.json の順)で見せる。枚数のランクが上から順に埋まっていく */
 .achv-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
   gap: 0.35rem;
   margin: 0.3rem 0;
   padding: 0;
   list-style: none;
 }
 
-/* 達成したアチーブメントの札。金の枠に「✓」を添える(押せる物ではないので、ボタンの見た目にはしない) */
+/* アチーブメントの札(押せる物ではないので、ボタンの見た目にはしない)。未達成は枠も文字も控えめにする */
 .achv {
-  padding: 0.15rem 0.6rem;
-  border: 1px solid var(--gilt-soft);
+  display: grid;
+  gap: 0.05rem;
+  padding: 0.3rem 0.6rem 0.35rem;
+  border: 1px solid var(--mat-line);
   border-radius: 0.35rem;
-  background: rgba(216, 179, 90, 0.1);
-  color: var(--gilt);
+  background: var(--mat-950);
+  color: var(--paper-dim);
   font-size: 0.8rem;
+  line-height: 1.4;
 }
 
-.achv::before {
-  content: '✓ ';
+.achv-name {
   font-weight: 700;
+}
+
+.achv-cond,
+.achv-count {
+  font-size: 0.72rem;
+}
+
+.achv-count {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 達成したものは金の枠に「✓」を添える */
+.achv.is-done {
+  border-color: var(--gilt-soft);
+  background: rgba(216, 179, 90, 0.1);
+  color: var(--gilt);
+}
+
+.achv.is-done .achv-name::before {
+  content: '✓ ';
+}
+
+.achv-meter {
+  display: block;
+  height: 0.2rem;
+  margin-top: 0.15rem;
+  border-radius: 999px;
+  background: var(--mat-800);
+  overflow: hidden;
+}
+
+.achv-meter span {
+  display: block;
+  height: 100%;
+  background: var(--gilt-soft);
 }
 
 .coll-filters {
@@ -1311,6 +1368,33 @@ textarea {
   height: 0.5rem;
   vertical-align: middle;
   accent-color: var(--gilt);
+}
+
+/* デッキの探索は数分かかるので、対局中の計算(.progress の小さいバー)より大きく、% を目立たせる */
+.search-progress {
+  margin: 0.4rem 0 0.6rem;
+}
+
+.search-progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.search-progress-bar progress {
+  flex: 1;
+  min-width: 0;
+  height: 0.6rem;
+  accent-color: var(--gilt);
+}
+
+.search-progress-pct {
+  min-width: 3.2em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--gilt);
 }
 
 .moves {
