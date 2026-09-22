@@ -40,8 +40,8 @@ export function DeckPicker({ decks, current, onLoad, onSave, onRename, onDelete 
                     maxLength={DECK_NAME_MAX}
                     autoFocus
                   />
-                  <button type="submit" className="btn-quiet">保存</button>
-                  <button type="button" className="btn-quiet" onClick={() => setEditing(null)}>やめる</button>
+                  <button type="submit" className="btn btn-sm">保存</button>
+                  <button type="button" className="btn-tertiary" onClick={() => setEditing(null)}>やめる</button>
                 </form>
               </li>
             ) : (
@@ -50,8 +50,8 @@ export function DeckPicker({ decks, current, onLoad, onSave, onRename, onDelete 
                   <span className="result-name">{d.name}</span>
                   <span className="result-sides">{d.cards.map((c) => c.label ?? formatSides(c.sides)).join('、')}</span>
                 </button>
-                <button type="button" className="btn-quiet" onClick={() => setEditing({ id: d.id, name: d.name })} aria-label={`${d.name} の名前を変更`}>名前を変更</button>
-                <button type="button" className="btn-quiet" onClick={() => onDelete(d.id)} aria-label={`${d.name} を削除`}>削除</button>
+                <button type="button" className="btn-tertiary" onClick={() => setEditing({ id: d.id, name: d.name })} aria-label={`${d.name} の名前を変更`}>名前を変更</button>
+                <button type="button" className="btn-danger btn-sm" onClick={() => onDelete(d.id)} aria-label={`${d.name} を削除`}>削除</button>
               </li>
             ),
           )}
@@ -67,7 +67,7 @@ export function DeckPicker({ decks, current, onLoad, onSave, onRename, onDelete 
           }}
         >
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="デッキ名" aria-label="デッキ名" maxLength={DECK_NAME_MAX} />
-          <button type="submit" className="btn-quiet">今の手札を保存</button>
+          <button type="submit" className="btn btn-sm">今の手札を保存</button>
         </form>
       )}
     </div>

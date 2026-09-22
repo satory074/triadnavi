@@ -89,7 +89,7 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
             ) : (
               <button type="button" className="btn" onClick={onOpenCollection}>手持ちを登録する</button>
             )}
-            <button type="button" className="btn-quiet" disabled={running} onClick={() => start('all')}>全カードを持っている前提で探す</button>
+            <button type="button" className="btn-tertiary" disabled={running} onClick={() => start('all')}>全カードを持っている前提で探す</button>
           </div>
           <p className="note">相手が最善を尽くしても勝ちが確定する状況が、最も多いデッキを探します。探索には数十秒から数分かかります。途中で止めても、その時点の最良が残ります。</p>
         </>
@@ -109,7 +109,7 @@ export function DeckAdvisor({ draft, collection, savedDecks, onUse, onOpenCollec
               <div className="search-progress-bar">
                 <progress value={progress.ratio} aria-label="探索の進み具合" />
                 <strong className="search-progress-pct">{progressPercent(progress.ratio)}%</strong>
-                <button type="button" className="btn-quiet" onClick={stop}>止める</button>
+                <button type="button" className="btn btn-sm" onClick={stop}>止める</button>
               </div>
               <p className="progress" role="status">
                 {PHASE_TEXT[progress.phase]}… 評価したデッキ {progress.decksDone}
@@ -166,7 +166,7 @@ function DeckResult({ search, evaluation, run, title, onUse }: ResultProps) {
       <div className="advisor-deck-head">
         <strong>{title}</strong>
         {search.ordered && <span className="muted">左から順に出す並びです</span>}
-        {onUse && <button type="button" className="btn-quiet" onClick={onUse}>このデッキを使う</button>}
+        {onUse && <button type="button" className="btn btn-sm" onClick={onUse}>このデッキを使う</button>}
       </div>
       <div className="hand-row">
         {evaluation.cards.map((c, i) => (

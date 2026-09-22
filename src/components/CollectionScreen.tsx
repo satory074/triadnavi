@@ -164,7 +164,7 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
       <div className="coll-head">
         <h2>手持ちのカード</h2>
         <span className="muted">所持 {known.length} / {CARDS.length} 枚(所有率 {percent}%)</span>
-        <button type="button" className="btn-quiet" onClick={onClose}>戻る</button>
+        <button type="button" className="btn-tertiary" onClick={onClose}>戻る</button>
       </div>
       <div className="meter" role="progressbar" aria-label="所有率" aria-valuemin={0} aria-valuemax={CARDS.length} aria-valuenow={known.length} aria-valuetext={`${percent}%`}>
         <span style={{ width: `${percent}%` }} />
@@ -224,8 +224,8 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
         </div>
         <div className="coll-row">
           <span className="muted">表示中 {shown.length} 枚</span>
-          <button type="button" className="btn-quiet" disabled={shown.length === 0} onClick={() => setShown(true)}>表示中を全て所持にする</button>
-          <button type="button" className="btn-quiet" disabled={shown.length === 0} onClick={() => setShown(false)}>表示中を全て外す</button>
+          <button type="button" className="btn-tertiary" disabled={shown.length === 0} onClick={() => setShown(true)}>表示中を全て所持にする</button>
+          <button type="button" className="btn-danger btn-sm" disabled={shown.length === 0} onClick={() => setShown(false)}>表示中を全て外す</button>
         </div>
       </div>
 
@@ -241,11 +241,11 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
         <h3>控えを取る/別の端末へ移す</h3>
         <p className="note">手持ちはこのブラウザにだけ保存されます。下の文字列を控えておけば、消えた時や別の端末で読み込めます。</p>
         <textarea readOnly value={exportCollection(collection)} rows={3} aria-label="手持ちの書き出し" onFocus={(e) => e.target.select()} />
-        <button type="button" className="btn-quiet" onClick={copy}>コピー</button>
+        <button type="button" className="btn-tertiary" onClick={copy}>コピー</button>
         <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={3} placeholder="控えた文字列、またはカード ID(例: 1-53,60,72)" aria-label="手持ちの読み込み" />
         <div className="coll-row">
-          <button type="button" className="btn-quiet" disabled={importText.trim() === ''} onClick={() => runImport(false)}>今の手持ちに追加する</button>
-          <button type="button" className="btn-quiet" disabled={importText.trim() === ''} onClick={() => runImport(true)}>今の手持ちと置き換える</button>
+          <button type="button" className="btn btn-sm" disabled={importText.trim() === ''} onClick={() => runImport(false)}>今の手持ちに追加する</button>
+          <button type="button" className="btn-danger btn-sm" disabled={importText.trim() === ''} onClick={() => runImport(true)}>今の手持ちと置き換える</button>
         </div>
         {message && <p className="note note-warn" role="status">{message}</p>}
       </section>

@@ -8,9 +8,13 @@
   --mat-800: #0d2530;
   --mat-700: #133342;
   --mat-600: #1a4355;
-  --mat-line: #265564;
-  --gilt: #d8b35a;
+  --mat-line: #265564; /* 区切り線。押せる物の枠には使わない(1.6:1 で見えない) */
+  --line-strong: #5d8899; /* 押せる物の枠(mat-700 の上で 3.4:1) */
+  --gilt: #d8b35a; /* おすすめ・主操作・選択中だけに使う */
   --gilt-soft: #9c8142;
+  --on-gilt: #1d1705; /* 金の上の文字 */
+  --focus: #9fe8ff; /* フォーカスの輪。おすすめの金の輪と混ざらない色 */
+  --warn: #e8975a; /* 注意の罫。金と区別する */
   --blue: #2f6fd6;
   --blue-deep: #173f8c;
   --red: #c8453f;
@@ -22,6 +26,12 @@
   --font-num: 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
   --font-display: 'Dela Gothic One', 'Hiragino Kaku Gothic ProN', sans-serif;
   --font-body: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', system-ui, sans-serif;
+  /* 文字の大きさは 5 段だけ。日本語の本文は 16px、添え字でも 12px を下回らない */
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.845rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.25rem;
+  --fs-xl: 1.75rem;
 }
 
 * {
@@ -35,7 +45,7 @@ html {
 body {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 0.95rem;
+  font-size: var(--fs-md);
   line-height: 1.6;
   color: var(--paper);
   background: radial-gradient(130% 80% at 50% 0%, var(--mat-800) 0%, var(--mat-950) 100%) fixed;
@@ -63,19 +73,19 @@ button:disabled {
 }
 
 :focus-visible {
-  outline: 2px solid var(--gilt);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
 h2 {
-  font-size: 1rem;
+  font-size: var(--fs-md);
   font-weight: 700;
   margin: 0 0 0.55rem;
-  color: var(--gilt);
+  color: var(--paper);
 }
 
 h3 {
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
   margin: 0.9rem 0 0.3rem;
 }
 
@@ -100,7 +110,7 @@ p {
 .site-head h1 {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: 1.35rem;
+  font-size: var(--fs-lg);
   letter-spacing: 0.02em;
   margin: 0;
   color: var(--gilt);
@@ -121,25 +131,22 @@ p {
 .tagline {
   margin: 0;
   color: var(--paper-dim);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   flex: 1;
 }
 
-/* ヘッダーの「手持ち」。本文の .btn より小さく、金の枠で押せる所だと分かるようにする。
-   金のベタ塗り(.btn-primary)は「対戦を始める」に取ってあるので、ここは枠と文字だけ金にする */
+/* ヘッダーの「手持ち」。本文の .btn より小さい枠付き。金のベタ塗り(.btn-primary)は「対戦を始める」に取ってある */
 .site-head .btn {
   padding: 0.3rem 0.7rem;
   min-height: 2.2rem;
-  font-size: 0.85rem;
-  border-color: var(--gilt-soft);
-  color: var(--gilt);
+  font-size: var(--fs-sm);
 }
 
-/* 手持ちの画面を開いている間は反転(.btn-quiet.is-on と同じ流儀) */
+/* 手持ちの画面を開いている間は反転(.btn-tertiary.is-on と同じ流儀) */
 .site-head .btn.is-on {
   background: var(--gilt);
   border-color: var(--gilt);
-  color: #1d1705;
+  color: var(--on-gilt);
 }
 
 .site-foot {
@@ -147,7 +154,7 @@ p {
   padding-top: 0.8rem;
   border-top: 1px solid var(--mat-line);
   color: var(--paper-dim);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
 }
 
 .site-foot p {
@@ -159,9 +166,15 @@ p {
   font-size: inherit;
 }
 
+.site-foot summary {
+  cursor: pointer;
+}
+
 /* ---- ボタン類 ---- */
+/* ボタンは 4 段: .btn-primary(金のベタ塗り。画面に 1 つ) > .btn(塗り+枠) > .btn-tertiary(薄い枠だけ) 。
+   取り消せない操作は .btn-danger(赤の枠)。文字だけの下線リンク風は、押せる所に見えないのでやめた */
 .btn {
-  border: 1px solid var(--mat-line);
+  border: 1px solid var(--line-strong);
   background: var(--mat-600);
   border-radius: 0.5rem;
   padding: 0.6rem 0.9rem;
@@ -172,9 +185,9 @@ p {
   width: 100%;
   border-color: var(--gilt);
   background: var(--gilt);
-  color: #1d1705;
+  color: var(--on-gilt);
   font-weight: 700;
-  font-size: 1.02rem;
+  font-size: var(--fs-md);
 }
 
 .key-hint {
@@ -199,26 +212,63 @@ p {
   font-weight: 400;
 }
 
-.btn-quiet {
-  border: 0;
+.btn-tertiary {
+  border: 1px solid var(--mat-line);
   background: none;
-  color: var(--gilt);
-  padding: 0.35rem 0.4rem;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  font-size: 0.85rem;
+  color: var(--paper);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.7rem;
+  min-height: 2.25rem;
+  font-size: var(--fs-sm);
 }
 
-.btn-quiet:disabled {
+.btn-tertiary:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--mat-700);
+}
+
+.btn-tertiary:disabled {
   color: var(--paper-dim);
-  text-decoration: none;
+  border-color: transparent;
 }
 
-.btn-quiet.is-on {
+.btn-tertiary.is-on {
   background: var(--gilt);
-  color: #1d1705;
-  border-radius: 0.35rem;
-  text-decoration: none;
+  border-color: var(--gilt);
+  color: var(--on-gilt);
+}
+
+.btn-danger {
+  border: 1px solid var(--bad);
+  background: transparent;
+  color: var(--bad);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  min-height: 2.75rem;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(240, 154, 147, 0.12);
+}
+
+.btn-danger:disabled {
+  color: var(--paper-dim);
+  border-color: var(--mat-line);
+}
+
+/* 文の中や見出しの横に置く小さい版 */
+.btn-sm {
+  min-height: 2.25rem;
+  padding: 0.3rem 0.7rem;
+  font-size: var(--fs-sm);
+}
+
+/* 2 段階の確認。1 回目で「[本当に実行] [やめる]」に変わる */
+.confirm-action {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .chips {
@@ -228,31 +278,31 @@ p {
 }
 
 .chip {
-  border: 1px solid var(--mat-line);
+  border: 1px solid var(--line-strong);
   background: transparent;
   border-radius: 999px;
   padding: 0.4rem 0.8rem;
   min-height: 2.4rem;
-  font-size: 0.88rem;
+  font-size: var(--fs-sm);
 }
 
 .chip-on {
   background: var(--gilt);
   border-color: var(--gilt);
-  color: #1d1705;
+  color: var(--on-gilt);
   font-weight: 700;
 }
 
 .chip-static {
   min-height: 0;
   padding: 0.1rem 0.6rem;
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
   color: var(--paper-dim);
 }
 
 .segmented {
   display: inline-flex;
-  border: 1px solid var(--mat-line);
+  border: 1px solid var(--line-strong);
   border-radius: 0.5rem;
   overflow: hidden;
 }
@@ -265,7 +315,7 @@ p {
 }
 
 .segmented button + button {
-  border-left: 1px solid var(--mat-line);
+  border-left: 1px solid var(--line-strong);
 }
 
 .segmented-big {
@@ -280,7 +330,7 @@ p {
 
 .seg-on {
   background: var(--gilt) !important;
-  color: #1d1705;
+  color: var(--on-gilt);
 }
 
 .seg-blue {
@@ -298,7 +348,7 @@ p {
   gap: 0.5rem;
   align-items: flex-start;
   margin-top: 0.6rem;
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   color: var(--paper-dim);
 }
 
@@ -311,20 +361,42 @@ input[type='search'],
 input:not([type]) {
   width: 100%;
   background: var(--mat-950);
-  border: 1px solid var(--mat-line);
+  border: 1px solid var(--line-strong);
   border-radius: 0.5rem;
   padding: 0.6rem 0.75rem;
   min-height: 2.75rem;
+  /* 16px 未満だと iOS がフォーカス時に画面を拡大する */
+  font-size: var(--fs-md);
+}
+
+/* 入力欄の可視ラベル(プレースホルダーは入力すると消えるので、ラベルの代わりにしない) */
+.field-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: var(--fs-sm);
+  color: var(--paper-dim);
+}
+
+/* 指で押す端末では、押せる物を 44px 以上にする(WCAG 2.5.8 / Apple 44pt) */
+@media (pointer: coarse) {
+  .chip,
+  .segmented button,
+  .btn-tertiary,
+  .btn-sm,
+  .tool-btn-sm,
+  .site-head .btn {
+    min-height: 2.75rem;
+  }
 }
 
 .note {
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--paper-dim);
 }
 
 .note-warn {
   color: var(--paper);
-  border-left: 3px solid var(--gilt);
+  border-left: 3px solid var(--warn);
   padding-left: 0.6rem;
 }
 
@@ -376,27 +448,28 @@ input:not([type]) {
 
 .result-sides {
   color: var(--paper-dim);
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   font-family: var(--font-num);
+  font-weight: 600;
   letter-spacing: 0.04em;
 }
 
 .result-type {
   grid-column: 1 / -1;
   color: var(--paper-dim);
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
 }
 
 .result-empty {
   padding: 0.6rem 0.7rem;
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
 }
 
 .npc-line {
   display: flex;
   align-items: baseline;
   gap: 0.6rem;
-  font-size: 1.05rem;
+  font-size: var(--fs-md);
 }
 
 .decks {
@@ -470,7 +543,7 @@ input:not([type]) {
 }
 
 .pool-name {
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   color: var(--paper-dim);
   text-align: center;
   line-height: 1.25;
@@ -483,7 +556,7 @@ input:not([type]) {
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.6rem;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--paper-dim);
 }
 
@@ -535,18 +608,18 @@ input:not([type]) {
 
 .advisor-deck-head .muted {
   flex: 1;
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
 }
 
 .advisor-deck-head strong {
-  color: var(--gilt);
+  color: var(--paper);
 }
 
 .advisor-lines {
   list-style: none;
   margin: 0.6rem 0 0;
   padding: 0;
-  font-size: 0.88rem;
+  font-size: var(--fs-sm);
 }
 
 .cls-plain {
@@ -557,7 +630,7 @@ input:not([type]) {
   width: 100%;
   margin-top: 0.6rem;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
 }
 
 .advisor-table th,
@@ -595,7 +668,7 @@ input:not([type]) {
 
 .coll-head .muted {
   flex: 1;
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
 }
 
 /* 所有率のバー。見出しの「所有率 N%」と同じ値を、細い金の帯で見せる */
@@ -622,7 +695,7 @@ input:not([type]) {
 .coll-achv h3 .muted {
   margin-left: 0.4rem;
   font-weight: 400;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 /* 達成・未達成を同じ並び(achievements.json の順)で見せる。枚数のランクが上から順に埋まっていく */
@@ -644,7 +717,7 @@ input:not([type]) {
   border-radius: 0.35rem;
   background: var(--mat-950);
   color: var(--paper-dim);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   line-height: 1.4;
 }
 
@@ -654,11 +727,12 @@ input:not([type]) {
 
 .achv-cond,
 .achv-count {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
 }
 
 .achv-count {
   font-family: var(--font-num);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -721,7 +795,8 @@ input:not([type]) {
 
 .coll-count {
   font-family: var(--font-num);
-  font-size: 0.8rem;
+  font-weight: 600;
+  font-size: var(--fs-sm);
   opacity: 0.8;
 }
 
@@ -757,12 +832,13 @@ input:not([type]) {
 
 .coll-no {
   font-family: var(--font-num);
-  font-size: 0.7rem;
+  font-weight: 600;
+  font-size: var(--fs-xs);
   color: var(--paper-dim);
 }
 
 .coll-stars {
-  color: var(--gilt);
+  color: var(--paper-dim);
 }
 
 /* 入手方法の吹き出し。位置は SourceTip が描いた直後に決めるので、それまでは隠す。
@@ -776,11 +852,11 @@ input:not([type]) {
   width: max-content;
   max-width: min(21rem, calc(100vw - 16px));
   padding: 0.5rem 0.7rem 0.55rem;
-  border: 1px solid var(--gilt-soft);
+  border: 1px solid var(--line-strong);
   border-radius: 0.5rem;
   background: var(--mat-800);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
   line-height: 1.45;
   pointer-events: none;
 }
@@ -808,8 +884,8 @@ input:not([type]) {
 
 .source-tip dt {
   padding-top: 0.08rem;
-  font-size: 0.7rem;
-  color: var(--gilt);
+  font-size: var(--fs-xs);
+  color: var(--paper-dim);
   white-space: nowrap;
 }
 
@@ -820,7 +896,7 @@ input:not([type]) {
 
 .source-where {
   display: block;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--paper-dim);
 }
 
@@ -835,9 +911,11 @@ textarea {
   width: 100%;
   font: inherit;
   font-family: var(--font-num);
+  font-weight: 600;
+  font-size: var(--fs-md);
   color: inherit;
   background: var(--mat-950);
-  border: 1px solid var(--mat-line);
+  border: 1px solid var(--line-strong);
   border-radius: 0.5rem;
   padding: 0.5rem 0.7rem;
   margin-top: 0.4rem;
@@ -876,7 +954,7 @@ textarea {
 
 .slot-action {
   text-align: center;
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   color: var(--paper-dim);
 }
 
@@ -934,7 +1012,7 @@ textarea {
   font-family: var(--font-num);
   font-weight: 700;
   font-size: 44cqw;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .card-sides {
@@ -1005,7 +1083,7 @@ textarea {
 .shift-down { color: var(--bad); }
 
 .side-active {
-  color: var(--gilt);
+  color: var(--focus);
   animation: blink 1s steps(2) infinite;
 }
 
@@ -1061,7 +1139,7 @@ textarea {
   line-height: 1.5;
   text-align: center;
   background: var(--gilt);
-  color: #1d1705;
+  color: var(--on-gilt);
 }
 
 .is-selected {
@@ -1168,11 +1246,11 @@ textarea {
   gap: 0.4rem;
   min-height: 2.6rem;
   padding: 0.35rem 0.85rem;
-  border: 1px solid var(--gilt-soft);
+  border: 1px solid var(--line-strong);
   border-radius: 0.5rem;
   background: var(--mat-700);
   color: var(--paper);
-  font-size: 0.88rem;
+  font-size: var(--fs-sm);
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
@@ -1182,17 +1260,18 @@ textarea {
   flex: none;
   width: 1.15em;
   height: 1.15em;
-  color: var(--gilt);
 }
 
 .tool-btn:hover:not(:disabled) {
   background: var(--mat-600);
-  border-color: var(--gilt);
+  border-color: var(--paper-dim);
 }
 
+/* 無効は薄く塗らず(3.5:1 で読めない)、文字色を落として枠を消す */
 .tool-btn:disabled {
   border-color: var(--mat-line);
-  opacity: 0.45;
+  background: transparent;
+  color: var(--paper-dim);
 }
 
 /* スワップの入力中。.btn-quiet.is-on と同じく金のベタ塗りで反転する */
@@ -1200,7 +1279,7 @@ textarea {
 .tool-btn.is-on:hover {
   background: var(--gilt);
   border-color: var(--gilt);
-  color: #1d1705;
+  color: var(--on-gilt);
 }
 
 .tool-btn.is-on .icon {
@@ -1211,7 +1290,7 @@ textarea {
 .tool-btn-sm {
   min-height: 2rem;
   padding: 0.2rem 0.65rem;
-  font-size: 0.8rem;
+  font-size: var(--fs-sm);
 }
 
 /* スマホ幅では横に並ばないので、アイコンを上・文字を下にして等幅のタブのように並べる */
@@ -1227,7 +1306,7 @@ textarea {
     gap: 0.2rem;
     min-height: 3.3rem;
     padding: 0.35rem 0.2rem;
-    font-size: 0.76rem;
+    font-size: var(--fs-xs);
   }
 
   .toolbar-actions .tool-btn .icon {
@@ -1296,22 +1375,16 @@ textarea {
 .kind {
   flex: none;
   font-weight: 700;
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
   padding: 0.1rem 0.5rem;
   border-radius: 0.3rem;
-  border: 1px solid var(--gilt);
-  color: var(--gilt);
-}
-
-.kind-estimate,
-.kind-chaos {
-  border-color: var(--paper-dim);
+  border: 1px solid var(--paper-dim);
   color: var(--paper-dim);
 }
 
 .headline {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
 }
 
 .best {
@@ -1320,7 +1393,7 @@ textarea {
 
 .best-move {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: var(--fs-lg);
   font-weight: 700;
   line-height: 1.35;
 }
@@ -1330,7 +1403,7 @@ textarea {
 }
 
 .best-to {
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
   font-weight: 400;
   color: var(--paper-dim);
   margin: 0 0.25em;
@@ -1340,12 +1413,12 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 0.2rem 0.6rem;
-  font-size: 0.88rem;
+  font-size: var(--fs-sm);
   margin: 0.3rem 0 0.7rem;
 }
 
 .pess {
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   color: var(--good);
 }
 
@@ -1354,12 +1427,12 @@ textarea {
 }
 
 .cls-win { color: var(--good); }
-.cls-draw { color: var(--gilt); }
+.cls-draw { color: var(--paper); }
 .cls-loss,
 .cls-notWin { color: var(--bad); }
 
 .progress {
-  font-size: 0.78rem;
+  font-size: var(--fs-xs);
   color: var(--paper-dim);
 }
 
@@ -1392,7 +1465,8 @@ textarea {
   min-width: 3.2em;
   text-align: right;
   font-family: var(--font-num);
-  font-size: 1.15rem;
+  font-weight: 600;
+  font-size: var(--fs-lg);
   font-variant-numeric: tabular-nums;
   color: var(--gilt);
 }
@@ -1400,7 +1474,7 @@ textarea {
 .moves {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.84rem;
+  font-size: var(--fs-sm);
   margin-top: 0.6rem;
 }
 
@@ -1408,7 +1482,7 @@ textarea {
   text-align: left;
   font-weight: 400;
   color: var(--paper-dim);
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   padding: 0.2rem 0.4rem 0.2rem 0;
 }
 
@@ -1440,50 +1514,51 @@ textarea {
 }
 
 .result-win .result-title { color: var(--good); }
-.result-draw .result-title { color: var(--gilt); }
+.result-draw .result-title { color: var(--paper); }
 .result-loss .result-title { color: var(--bad); }
 
 .result-score {
   font-family: var(--font-num);
-  font-size: 1.4rem;
+  font-weight: 600;
+  font-size: var(--fs-lg);
   margin: 0 0 0.8rem;
 }
 
 .rematch {
   text-align: left;
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
   margin-bottom: 0.8rem;
 }
 
 /* ---- モーダルとカード入力 ---- */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  background: rgba(3, 12, 16, 0.72);
-  display: grid;
-  place-items: end center;
-}
-
-.modal {
+/* ネイティブの <dialog>。フォーカスの閉じ込め・Escape・背景の inert 化はブラウザに任せる。
+   余白は .modal-body に持たせる(dialog 自身の余白をクリックすると背景クリックと区別できない) */
+dialog.modal {
   width: 100%;
   max-width: 30rem;
-  max-height: 92vh;
+  max-height: 92dvh;
+  margin: auto auto 0;
+  padding: 0;
   overflow-y: auto;
+  color: var(--paper);
   background: var(--mat-800);
-  border: 1px solid var(--mat-line);
+  border: 1px solid var(--line-strong);
   border-bottom: 0;
   border-radius: 0.9rem 0.9rem 0 0;
+}
+
+dialog.modal::backdrop {
+  background: rgba(3, 12, 16, 0.72);
+}
+
+.modal-body {
   padding: 0.9rem 1rem 1.2rem;
 }
 
 @media (min-width: 40rem) {
-  .modal-backdrop {
-    place-items: center;
-  }
-
-  .modal {
-    border-bottom: 1px solid var(--mat-line);
+  dialog.modal {
+    margin: auto;
+    border-bottom: 1px solid var(--line-strong);
     border-radius: 0.9rem;
   }
 }
@@ -1512,7 +1587,7 @@ textarea {
 }
 
 .editor-hint {
-  font-size: 1.15rem;
+  font-size: var(--fs-lg);
   font-weight: 700;
 }
 
@@ -1523,18 +1598,18 @@ textarea {
 }
 
 .key {
-  border: 1px solid var(--mat-line);
+  border: 1px solid var(--line-strong);
   background: var(--mat-600);
   border-radius: 0.5rem;
   min-height: 3.2rem;
   font-family: var(--font-num);
   font-weight: 700;
-  font-size: 1.5rem;
+  font-size: var(--fs-xl);
 }
 
 .key:active {
   background: var(--gilt);
-  color: #1d1705;
+  color: var(--on-gilt);
 }
 
 .key-wide {
@@ -1543,7 +1618,7 @@ textarea {
 
 .key-back {
   font-family: var(--font-body);
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
   font-weight: 400;
 }
 
@@ -1558,17 +1633,17 @@ textarea {
 
 .editor-search label {
   display: block;
-  font-size: 0.82rem;
+  font-size: var(--fs-sm);
   color: var(--paper-dim);
   margin-bottom: 0.25rem;
 }
 
 .help {
-  font-size: 0.88rem;
+  font-size: var(--fs-sm);
 }
 
 .help h3 {
-  color: var(--gilt);
+  color: var(--paper);
 }
 
 .help ul {

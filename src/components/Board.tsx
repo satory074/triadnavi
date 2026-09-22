@@ -15,7 +15,7 @@ const CAUSE_LABEL: Record<Flip['cause'], string> = { basic: '', same: 'セイム
 
 export function Board({ view, shiftOf, recommendedCell, canPlace, onCell }: Props) {
   return (
-    <div className="board" role="grid" aria-label="盤面">
+    <div className="board" role="group" aria-label="盤面">
       {view.state.board.map((c, cell) => {
         if (!c) {
           return (

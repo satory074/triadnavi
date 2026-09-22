@@ -109,7 +109,7 @@ export function CardEditor({ title, owner, typeMatters, onCommit, onClose }: Pro
                 ))}
               </>
             )}
-            <button type="button" className="btn-quiet" onClick={back}>打ち直す</button>
+            <button type="button" className="btn-tertiary" onClick={back}>打ち直す</button>
           </div>
         ) : (
           <SideKeypad onDigit={push} onBackspace={back} />

@@ -19,7 +19,7 @@ export function NpcPicker({ npcId, onPick, onClear }: Props) {
         <div className="npc-line">
           <strong>{npc.name}</strong>
           <span className="muted">{npc.location}</span>
-          <button type="button" className="btn-quiet" onClick={onClear}>変更</button>
+          <button type="button" className="btn btn-sm" onClick={onClear}>変更</button>
         </div>
         <p className="note">
           固定カード {npc.fixed.length} 枚は必ず手札に入り、残り {5 - npc.fixed.length} 枚は候補 {npc.variable.length} 枚の中から選ばれます。

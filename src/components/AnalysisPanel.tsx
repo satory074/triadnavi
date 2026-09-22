@@ -78,7 +78,7 @@ export function AnalysisPanel({ solver, cards, onApply }: Props) {
         </tbody>
       </table>
       {ranked.length > 6 && (
-        <button type="button" className="btn-quiet" onClick={() => setShowAll(!showAll)}>
+        <button type="button" className="btn-tertiary" onClick={() => setShowAll(!showAll)}>
           {showAll ? '上位だけ表示' : `全 ${ranked.length} 手を表示`}
         </button>
       )}

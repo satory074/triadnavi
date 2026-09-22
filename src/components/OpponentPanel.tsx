@@ -48,7 +48,7 @@ export function OpponentPanel({ draft, orderActive, onEditSlot, onClearSlot, onR
                   <div className="slot" key={i}>
                     <CardView card={card} owner={1} size="sm" showName={false} onClick={() => onReveal(i)} ariaLabel="このカードは手札に見えている" />
                     <span className="pool-name">{card.label ?? ''}</span>
-                    {!hasNpc && <button type="button" className="btn-quiet" onClick={() => onRemoveCandidate(i)}>削除</button>}
+                    {!hasNpc && <button type="button" className="btn-tertiary" onClick={() => onRemoveCandidate(i)}>削除</button>}
                   </div>
                 ))}
               </div>
@@ -56,7 +56,7 @@ export function OpponentPanel({ draft, orderActive, onEditSlot, onClearSlot, onR
           ) : (
             <p className="note">候補が分かっていれば追加すると、「どのカードを持っていても成り立つ保証」を出せます。</p>
           )}
-          <button type="button" className="btn-quiet" onClick={onAddCandidate}>候補を追加</button>
+          <button type="button" className="btn btn-sm" onClick={onAddCandidate}>候補を追加</button>
 
           {draft.oppPool.length < unknown && (
             <div className="prior">

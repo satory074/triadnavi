@@ -51,7 +51,7 @@ export default function App() {
             {ownedCount > 0 ? `手持ち ${ownedCount} 枚` : '手持ちを登録'}
           </button>
         )}
-        <button type="button" className="btn-quiet" onClick={() => setHelp(true)}>保証できること</button>
+        <button type="button" className="btn-tertiary" onClick={() => setHelp(true)}>保証できること</button>
       </header>
 
       {collecting && !playing ? (
@@ -88,10 +88,11 @@ export default function App() {
           <input type="checkbox" checked={prefs.cardArt} onChange={(e) => setPrefs({ ...prefs, cardArt: e.target.checked })} />
           カードの絵を表示
         </label>
-        <p>非公式のファンツールです。</p>
-        <p>カードと NPC のデータ: FFXIV Collect、XIVAPI</p>
-        <p>カードの絵はゲーム内の画像です。このサイトには置かず、有志のサービス XIVAPI から表示のたびに読み込んでいます(「カードの絵を表示」を外すと読み込みません)。</p>
-        <p>FINAL FANTASY XIV © SQUARE ENIX</p>
+        <p>非公式のファンツールです。カードと NPC のデータ: FFXIV Collect、XIVAPI。FINAL FANTASY XIV © SQUARE ENIX</p>
+        <details>
+          <summary>カードの絵について</summary>
+          <p>カードの絵はゲーム内の画像です。このサイトには置かず、有志のサービス XIVAPI から表示のたびに読み込んでいます(「カードの絵を表示」を外すと読み込みません)。</p>
+        </details>
       </footer>
 
       {help && <HelpModal onClose={() => setHelp(false)} />}

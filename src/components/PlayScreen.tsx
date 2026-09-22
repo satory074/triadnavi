@@ -188,7 +188,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
     if (!enterMove) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
-      if (document.querySelector('[aria-modal="true"]')) return;
+      if (document.querySelector('dialog[open]')) return;
       const t = e.target;
       if (t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || (t instanceof HTMLInputElement && t.type !== 'checkbox')) return;
       // マウスで押したボタン(「1 手戻す」など)にはフォーカスが残るので、既定の動作を止めないとそのボタンがもう一度押される
@@ -269,7 +269,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
       {view.overridden && (
         <p className="note note-warn">
           ルールの想定がゲームと食い違いました。以降の「確定」「保証」は参考としてください。
-          <button type="button" className="btn-quiet" onClick={copyDiscrepancy}>{copied ? 'コピーしました' : '食い違いをコピー'}</button>
+          <button type="button" className="btn-tertiary" onClick={copyDiscrepancy}>{copied ? 'コピーしました' : '食い違いをコピー'}</button>
         </p>
       )}
       {view.outOfPool && <p className="note note-warn">入力や候補リストに無いカードが出ました。それまでの保証は成り立っていませんでした。</p>}
@@ -295,7 +295,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
           )}
           {!myTurn && !view.finished && view.oppUnknown === 0 && (
             <p className="hand-extra">
-              <button type="button" className="btn-quiet" onClick={() => setPicker('mismatch')}>入力と違うカードが出た</button>
+              <button type="button" className="btn-tertiary" onClick={() => setPicker('mismatch')}>入力と違うカードが出た</button>
             </p>
           )}
           {adhoc && <p className="note">出たカード: {adhoc.label ?? adhoc.sides.join('/')}。置かれたマスをタップしてください。</p>}
@@ -332,7 +332,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
               )}
               {view.outcome === 'draw' && setup.rules.suddenDeath && setup.round >= MAX_REMATCHES && <p>再戦は 5 回までです。この対戦は引き分けで終わります。</p>}
               {npcKey && unlisted.length > 0 && (
-                <button type="button" className="btn-quiet" onClick={() => onSaved(learnCards(saved, npcKey, unlisted, []))}>
+                <button type="button" className="btn btn-sm" onClick={() => onSaved(learnCards(saved, npcKey, unlisted, []))}>
                   リストに無かったカード {unlisted.length} 枚を、この NPC の候補に追加
                 </button>
               )}
@@ -365,7 +365,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
               </div>
             ))}
           </div>
-          <button type="button" className="btn-quiet" onClick={() => setPicker('reveal-editor')}>リストに無いカードだった</button>
+          <button type="button" className="btn-tertiary" onClick={() => setPicker('reveal-editor')}>リストに無いカードだった</button>
         </Modal>
       )}
       {picker === 'swap-pool' && (
@@ -378,7 +378,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
               </div>
             ))}
           </div>
-          <button type="button" className="btn-quiet" onClick={() => setPicker('swap-editor')}>リストに無いカードだった</button>
+          <button type="button" className="btn-tertiary" onClick={() => setPicker('swap-editor')}>リストに無いカードだった</button>
         </Modal>
       )}
       {picker === 'swap-editor' && (
