@@ -654,6 +654,65 @@ input:not([type]) {
   color: var(--gilt);
 }
 
+/* 入手方法の吹き出し。位置は SourceTip が描いた直後に決めるので、それまでは隠す。
+   下のカードのクリックを邪魔しないよう、マウスは素通しにする */
+.source-tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  visibility: hidden;
+  width: max-content;
+  max-width: min(21rem, calc(100vw - 16px));
+  padding: 0.5rem 0.7rem 0.55rem;
+  border: 1px solid var(--gilt-soft);
+  border-radius: 0.5rem;
+  background: var(--mat-800);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.source-tip-head {
+  margin-bottom: 0.35rem;
+  font-weight: 700;
+}
+
+.source-tip p {
+  margin: 0;
+}
+
+/* 分類の列をそろえる */
+.source-tip dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.6rem;
+  margin: 0;
+}
+
+.source-row {
+  display: contents;
+}
+
+.source-tip dt {
+  padding-top: 0.08rem;
+  font-size: 0.7rem;
+  color: var(--gilt);
+  white-space: nowrap;
+}
+
+.source-tip dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.source-where {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--paper-dim);
+}
+
 .coll-io {
   margin-top: 1.6rem;
   padding-top: 0.4rem;

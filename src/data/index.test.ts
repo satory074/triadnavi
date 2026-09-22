@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeRng } from '../core/rng';
 import {
-  CARDS, CARDS_IN_LIST_ORDER, NPCS, artIdOf, cardArtUrl, cardNumber, findBySides, handProblems, normalize, npcCards, ownedCards, resolveCardIds,
+  CARDS, CARDS_IN_LIST_ORDER, CARD_SOURCES, NPCS, artIdOf, cardArtUrl, cardNumber, cardSources, findBySides, handProblems, normalize, npcCards, ownedCards, resolveCardIds,
   resolveDeck, samplePriorCard, searchCards, searchNpcs, toCardDef, typeFromSides,
 } from './index';
 
@@ -189,5 +189,24 @@ describe('カードの絵', () => {
     expect(cardArtUrl(1)).toBe('https://v2.xivapi.com/api/asset?path=ui/icon/087000/087001.tex&format=webp');
     expect(cardArtUrl(475)).toContain('/087000/087475.tex');
     expect(cardArtUrl(1, true)).toContain('/087000/087001_hr1.tex');
+  });
+});
+
+describe('入手方法', () => {
+  // sources.json は cards.json と別のファイルなので、ID の対応が崩れたら手持ちの画面で空の吹き出しになる
+  it('同梱の全カードに入手方法が 1 件以上ある', () => {
+    for (const c of CARDS) expect(cardSources(c.id).length, `${c.id} ${c.name}`).toBeGreaterThan(0);
+  });
+
+  it('入手方法のデータに、同梱データに無いカード ID が無い', () => {
+    const ids = new Set(CARDS.map((c) => c.id));
+    for (const id of CARD_SOURCES.keys()) expect(ids.has(id), `ID ${id}`).toBe(true);
+  });
+
+  it('英語のまま残った入手方法が無い(値段だけの「N MGP」は除く)', () => {
+    const ja = /[\u3040-\u30ff\u3400-\u9fff]/;
+    for (const [id, list] of CARD_SOURCES) {
+      for (const s of list) expect(ja.test(s.text) || /^[\d,]+ MGP$/.test(s.text), `${id}: ${s.text}`).toBe(true);
+    }
   });
 });

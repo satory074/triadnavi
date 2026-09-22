@@ -16,7 +16,7 @@ npm run lint         # oxlint
 npm run preview      # ビルド成果物の確認 (http://localhost:4173/triadnavi/)
 npm run bench        # 探索のベンチマーク(VITE_BENCH=1 で bench.test.ts を有効化)
 npm run bench:deck   # デッキ 1 つの評価にかかる時間を、実在の NPC で測る(deckBench.test.ts。数分かかる)
-npm run data:update  # カード/NPC データの更新(手動実行。生成された src/data/*.json をコミットする)
+npm run data:update  # カード/NPC/入手方法のデータの更新(手動実行。生成された src/data/*.json をコミットする)
 ```
 
 `npm install` が `Cannot read properties of null (reading 'edgesOut')` で落ちる場合は npm 10.9.2 の依存解決の不具合。`package-lock.json` がある状態なら通る。
@@ -45,8 +45,9 @@ npm run data:update  # カード/NPC データの更新(手動実行。生成さ
 - `core/deckPool.ts` — 探索の候補の絞り込み(相手のカードに対する採点)、出発点のデッキ、1 手先のデッキ
 - `core/deckSearch.ts` — デッキ探索の進行(純関数の状態機械。`scheduler.ts` と同じ流儀)と、対戦条件から探索を組み立てる `prepareDeckSearch()`
 - `core/deckRank.ts` — デッキの結果の日本語のラベルと注意書き
-- `data/` — 同梱データ(`cards.json` / `npcs.json`)と検索、数字 4 つからの逆引き、数字 → カード ID の対応づけ、カードの絵の ID と URL(`artIdOf` / `cardArtUrl`)。エンジンとソルバーは触らない(core は `data/` を import しない。ID とレアリティが要る所は `DeckCard` で受け取る)
+- `data/` — 同梱データ(`cards.json` / `npcs.json` / `sources.json`)と検索、数字 4 つからの逆引き、数字 → カード ID の対応づけ、カードの絵の ID と URL(`artIdOf` / `cardArtUrl`)、カードの入手方法(`cardSources`)。エンジンとソルバーは触らない(core は `data/` を import しない。ID とレアリティが要る所は `DeckCard` で受け取る)
 - `worker/solver.worker.ts` — `runTask` を包むだけの殻。`hooks/useSolver.ts` がワーカープールを管理する
+- `components/SourceTip.tsx` — 手持ちの画面で、マウスを乗せたカードの入手方法を出す吹き出し
 - `hooks/useCardArt.ts` — カードの絵を出すかのコンテキスト。`CardView` が直接読む(`memo` した `CollectionCell` の内側にも届かせるため、props では渡さない)
 - `worker/deck.worker.ts` — `runDeckTask` を包むだけの殻。`hooks/useDeckSearch.ts` がワーカープールを管理する(`useSolver` の写し。`useSolver` は対局中の本線でテストが無いので、共通化していない)
 
@@ -77,6 +78,8 @@ npm run data:update  # カード/NPC データの更新(手動実行。生成さ
 - **デッキの評価の速さ(`npm run bench:deck` の実測)**: 勝ちの探りは中央値 50〜160ms、負けの深さまでの探索は 0.3〜0.6 秒(セイム/プラスや強い NPC で重い)。オーダーとカオスは出すカードが決まっているので 1 シナリオ 1〜5ms。上位集合の探りは 30〜520ms。ブラウザの実測では、セイム+プラスの NPC で 28 秒に 79 デッキ、オーダーで 20 秒に 257 デッキ。最悪は強い NPC のスワップ(24 シナリオ)で 1 デッキ 2〜3 秒。
 - **カードの絵は XIVAPI への直リンクで、同梱しない**: カード 1 枚ごとの絵の公式な配布元は無い(調査済み: スクウェア・エニックスに公開 API は無く、Lodestone のエオルゼアデータベースは 475 枚すべてが共通のアイテムアイコン 3 種、公式プレイガイドにも公式ファンキットにも無い)。絵は XIVAPI v2 のアセット変換(`/api/asset?path=ui/icon/087000/0870NN.tex&format=webp`。JPEG は透過が黒く潰れる)を `<img>` で実行時に読む。XIVAPI はゲームのパッチから取り出したファイルを配っている有志のサービスで、スクウェア・エニックスの著作物利用条件が挙げる素材(スクリーンショット、公式サイトの画像、ファンキットなど)の範囲外だと分かった上での判断。リポジトリにも `dist` にも画像を入れないので、やめる時は `CardView` の `<img>` を消すだけでよい。アイコン番号は 87000 + カード ID(XIVAPI のシートに絵の項目は無いので `cardArtUrl` で組み立てる。`fetch-data.mjs` と `cards.json` は変えていない)。`CardDef` は ID を持たないので `artIdOf` で引くが、数字が同じカードが複数ある 9 組(タイプも同じ 6 組 + タイプだけが違う 3 組)は名前が一致した時だけ絵を出す(数字を打って確定したカードは名前が「A / B」になり絵なし。違う絵を出すより出さない方を採る)。タイプで絞って 1 枚に決めてはいけない(タイプが効かないルールでは `CardEditor` が先頭の候補のタイプで確定する)。`DeckAdvisor` は手札を ID に対応づける時に名前を推測で書き換えるので、この 9 組では絵も表示中の名前に合わせた推測になる。読み込みに失敗したら数字だけの表示に戻る(失敗は真偽値ではなく ID で覚える。同じ `CardView` が後で別のカードを映すため)。数字の下の暗い円などの強調は `.has-art` の時だけ掛かり、絵が無い時の見た目は変えない。「カードの絵を表示」(`triadnavi:prefs:v1`、既定はオン)を切ると `<img>` を描かないので、XIVAPI への通信は 0 件になる。同じ理由で `index.html` に preconnect を置かない。
 - **データの更新は手動**: CI では第三者 API を叩かない(API の停止でデプロイが壊れないように)。NPC のデッキとルールはゲームデータ由来の XIVAPI を正とする。ルーレットが 2 枠ある NPC は `rules: [1, 1]` になる。
+- **カードの入手方法は FFXIV Collect の記載を日本語にそろえて同梱する**(`sources.json`、1 行 1 枚。`cards.json` の形は変えていない)。日本語を指定しても分類名と一部の文章(FATE のジェム交換、エウレカ、ディープダンジョン、友好部族など 43 種類)が英語で返るので、分類名は `fetch-data.mjs` の `KIND_JA`、文章は `scripts/source-ja.json`(英語の原文 → `{text, where}`)で置き換える。訳の名前は XIVAPI のゲームデータを英語名で引いた日本語名で、判断が要るもの(ディープダンジョンの「Silver Sack」が埋もれた財宝の何番か、など)は日本の攻略サイトでも確かめた。表に無い英語は英語のまま残して警告を出す(更新は止めない)。新しいパッチで警告が出たら表に足すこと。パックはカードの記載が「Dream Triad Card」だけなので、パックの API の名前と値段に置き換える(値段 0 のプラチナは大会の賞品)。NPC は `related_id` で NPC の API の場所と座標を付ける。
+- **入手方法はマウスとキーボードの時だけ出す**: スマホのタップでも `pointerenter` は来るが、出すと次に触るまで残るので `pointerType === 'mouse'` で絞っている(タップは所持の切り替えのまま)。フォーカスでは `:focus-visible` の時だけ出す(マウスで押した後に残るフォーカスで出すと、離れても消えなくなる)。吹き出しは画面に 1 つだけ置き、描いた直後に大きさを測って位置を要素に直接書く(カードの下、入らなければ上。左右は画面の中)。乗せてから 250ms で出し、出ている間に隣へ移れば待たずに切り替える。スクロールすると位置がずれるので消す。非表示のタブではタイマーが 1 秒ほどに間引かれるので、自動操作で確かめる時は待ち時間を長めに取る。
 
 ### 実機で未確認の挙動(どの情報源にも検証例が無い)
 

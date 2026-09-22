@@ -3,6 +3,7 @@ import type { Rng } from '../core/rng';
 import type { CardDef, CardType, Sides } from '../core/types';
 import cardsJson from './cards.json';
 import npcsJson from './npcs.json';
+import sourcesJson from './sources.json';
 
 /**
  * 同梱データ(`npm run data:update` で生成)。エンジンとソルバーは {sides, type} しか見ないので、
@@ -34,8 +35,26 @@ export interface NpcInfo {
   usesRegional: boolean;
 }
 
+/** カードの入手方法 1 件。FFXIV Collect の記載を日本語にそろえたもの(英語の文章の訳は scripts/source-ja.json) */
+export interface CardSource {
+  /** 分類(「NPC 対戦」「ダンジョン」「MGP 交換」「パック」など) */
+  kind: string;
+  /** 何から手に入るか(NPC の名前、コンテンツ名、交換の相手と値段など) */
+  text: string;
+  /** 場所や値段の補足(NPC なら場所と座標) */
+  where?: string;
+}
+
 export const CARDS: readonly CardInfo[] = cardsJson as unknown as CardInfo[];
 export const NPCS: readonly NpcInfo[] = npcsJson as unknown as NpcInfo[];
+export const CARD_SOURCES: ReadonlyMap<number, readonly CardSource[]> = new Map(
+  (sourcesJson as { id: number; sources: CardSource[] }[]).map((x) => [x.id, x.sources]),
+);
+
+/** カードの入手方法。同梱データに無いカードは空 */
+export function cardSources(id: number): readonly CardSource[] {
+  return CARD_SOURCES.get(id) ?? [];
+}
 
 const byId = new Map(CARDS.map((c) => [c.id, c]));
 const bySides = new Map<string, CardInfo[]>();

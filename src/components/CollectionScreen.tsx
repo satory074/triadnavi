@@ -1,8 +1,9 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { exportCollection, importCollection, withOwned, type Collection } from '../core/collection';
 import { CARD_TYPE_NAMES } from '../core/types';
 import { CARDS, CARDS_IN_LIST_ORDER, cardNumber, normalize, ownedCards, toCardDef, type CardInfo } from '../data';
 import { CardView } from './CardView';
+import { SourceTip } from './SourceTip';
 
 interface Props {
   collection: Collection;
@@ -15,21 +16,37 @@ type OwnedFilter = 'all' | 'owned' | 'missing';
 const STARS = [1, 2, 3, 4, 5];
 const searchIndex = new Map(CARDS.map((c) => [c.id, normalize(c.name)]));
 
+const TIP_ID = 'coll-source-tip';
+/** 乗せてから入手方法が出るまで。カードの上をなぞっただけで吹き出しがちらつかないように */
+const TIP_SHOW_MS = 250;
+/** 離れてから消えるまで。隣のカードへ移る間に消えず、そのまま切り替わるように */
+const TIP_HIDE_MS = 80;
+
 interface CellProps {
   card: CardInfo;
   owned: boolean;
+  /** このカードの入手方法を吹き出しに出している */
+  described: boolean;
   onToggle: (id: number) => void;
+  onHover: (card: CardInfo | null, el?: HTMLElement) => void;
 }
 
 /** 475 枚を並べるので、所持が変わったカードだけ描き直す */
-const CollectionCell = memo(function CollectionCell({ card, owned, onToggle }: CellProps) {
+const CollectionCell = memo(function CollectionCell({ card, owned, described, onToggle, onHover }: CellProps) {
   return (
     <button
       type="button"
       className={`coll-cell${owned ? ' is-owned' : ''}`}
       aria-pressed={owned}
       aria-label={`${cardNumber(card)} ${card.name} ★${card.stars}`}
+      aria-describedby={described ? TIP_ID : undefined}
       onClick={() => onToggle(card.id)}
+      // マウスの時だけ出す。スマホのタップでも pointerenter は来るが、出すと次に触るまで残ってしまう
+      onPointerEnter={(e) => e.pointerType === 'mouse' && onHover(card, e.currentTarget)}
+      onPointerLeave={() => onHover(null)}
+      // キーボードで移った時だけ出す。マウスで押した後に残るフォーカスでは出さない(離れても消えなくなる)
+      onFocus={(e) => e.currentTarget.matches(':focus-visible') && onHover(card, e.currentTarget)}
+      onBlur={() => onHover(null)}
     >
       <CardView card={toCardDef(card)} owner={owned ? 0 : 'none'} size="sm" showName={false} />
       <span className="coll-no">{cardNumber(card)} <span className="coll-stars">★{card.stars}</span></span>
@@ -46,6 +63,9 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
   const [query, setQuery] = useState('');
   const [importText, setImportText] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [tip, setTip] = useState<{ card: CardInfo; anchor: DOMRect } | null>(null);
+  const tipTimer = useRef<number | undefined>(undefined);
+  const tipOpen = useRef(false);
 
   const ownedSet = useMemo(() => new Set(collection.owned), [collection]);
   const known = useMemo(() => ownedCards(collection), [collection]);
@@ -68,6 +88,47 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
     (id: number) => onChange((prev) => withOwned(prev, [id], !prev.owned.includes(id))),
     [onChange],
   );
+
+  const showTip = useCallback((next: { card: CardInfo; anchor: DOMRect } | null) => {
+    window.clearTimeout(tipTimer.current);
+    tipOpen.current = next !== null;
+    setTip(next);
+  }, []);
+
+  const hover = useCallback(
+    (card: CardInfo | null, el?: HTMLElement) => {
+      window.clearTimeout(tipTimer.current);
+      if (card && el) {
+        const show = () => showTip({ card, anchor: el.getBoundingClientRect() });
+        // 既に出ている時(隣のカードへ移った時)は待たずに切り替える
+        if (tipOpen.current) show();
+        else tipTimer.current = window.setTimeout(show, TIP_SHOW_MS);
+      } else {
+        tipTimer.current = window.setTimeout(() => showTip(null), TIP_HIDE_MS);
+      }
+    },
+    [showTip],
+  );
+
+  // 吹き出しは画面に固定した位置に出すので、スクロールしたらカードとずれる。消して、次に乗せた時に出し直す
+  const tipShown = tip !== null;
+  useEffect(() => {
+    if (!tipShown) return;
+    const hide = () => showTip(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') hide();
+    };
+    window.addEventListener('scroll', hide, { capture: true, passive: true });
+    window.addEventListener('resize', hide);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', hide, { capture: true });
+      window.removeEventListener('resize', hide);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [tipShown, showTip]);
+
+  useEffect(() => () => window.clearTimeout(tipTimer.current), []);
 
   const setShown = (owned: boolean) => {
     const ids = shown.map((c) => c.id);
@@ -102,7 +163,7 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
         <span className="muted">所持 {known.length} / {CARDS.length} 枚</span>
         <button type="button" className="btn-quiet" onClick={onClose}>戻る</button>
       </div>
-      <p className="note">ゲーム内の「カードリスト」と同じ並びです。持っているカードをタップしてください。ここで登録した手持ちから、対戦相手に合わせたデッキを探せます。</p>
+      <p className="note">ゲーム内の「カードリスト」と同じ並びです。持っているカードをタップしてください。ここで登録した手持ちから、対戦相手に合わせたデッキを探せます。カードにマウスを乗せると入手方法が出ます。</p>
 
       <div className="coll-filters">
         <div className="chips" role="group" aria-label="レアリティで絞り込む">
@@ -143,10 +204,11 @@ export function CollectionScreen({ collection, onChange, onClose }: Props) {
 
       <div className="coll-grid">
         {shown.map((c) => (
-          <CollectionCell key={c.id} card={c} owned={ownedSet.has(c.id)} onToggle={toggle} />
+          <CollectionCell key={c.id} card={c} owned={ownedSet.has(c.id)} described={tip?.card.id === c.id} onToggle={toggle} onHover={hover} />
         ))}
       </div>
       {shown.length === 0 && <p className="result-empty">条件に合うカードがありません</p>}
+      {tip && <SourceTip id={TIP_ID} card={tip.card} anchor={tip.anchor} />}
 
       <section className="coll-io">
         <h3>控えを取る/別の端末へ移す</h3>
