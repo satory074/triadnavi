@@ -46,7 +46,9 @@ export function AnalysisPanel({ solver, cards, onApply }: Props) {
             <span>{secondaryText(best, a)}</span>
           </p>
           {pess && <p className="pess">{pess}</p>}
-          <button type="button" className="btn btn-primary" onClick={() => onApply(best)}>おすすめ通りに打った</button>
+          <button type="button" className="btn btn-primary" onClick={() => onApply(best)}>
+            おすすめ通りに打った<kbd className="key-hint">Enter</kbd>
+          </button>
         </div>
       ) : (
         <p className="note">計算を始めています</p>

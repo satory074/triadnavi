@@ -130,6 +130,15 @@ export function draftToSetup(draft: SetupDraft): MatchSetup | null {
 }
 
 /**
+ * 「はじめから」: 同じ設定の最初の対局に戻す。対局中は下書きを変えられないので、下書きは 1 局目の設定のまま。
+ * サドンデスの再戦で組み直した手札と回数は捨てる。
+ */
+export function restartMatch(state: AppState): AppState {
+  const setup = draftToSetup(state.draft) ?? state.setup;
+  return { ...state, phase: 'play', setup, events: [] };
+}
+
+/**
  * デッキの評価に使う対戦条件。ルーレットとスワップは下書きのルールには入らない(対戦が始まってから決まる)ので、
  * NPC の固定ルールから受け取る。NPC を選んでいない時は空でよい。
  */

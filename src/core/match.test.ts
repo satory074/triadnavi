@@ -232,6 +232,18 @@ describe('スワップ', () => {
     expect(v.oppUnknown).toBe(2);
   });
 
+  it('置く前のスワップと開く記録は、先攻に依らず全て再生される(対局画面で先攻を切り替えても消えない)', () => {
+    const events: MatchEvent[] = [
+      { t: 'reveal', card: { from: 'pool', index: 0 } },
+      { t: 'swap', mine: 2, theirs: { from: 'revealed', index: 0 } },
+    ];
+    for (const first of [0, 1] as const) {
+      const v = replay({ ...hidden(), first }, events);
+      expect(v.applied).toBe(events.length);
+      expect(v.turn).toBe(first);
+    }
+  });
+
   it('自分の手札に無いカード、相手が持っていないカード、不明スロットが無い手入力は捨てる', () => {
     const s = baseSetup();
     const twice: MatchEvent[] = [

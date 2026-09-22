@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { chaosExactFeasible } from '../core/analyze';
 import { cardRefOf, needsForcedCard, orderForcedCard, replay, toPosition, type MatchEvent, type MatchSetup, type RevealRef, type SwapRef } from '../core/match';
 import { guaranteeKind, placedCount, positionKey, type Position } from '../core/position';
@@ -27,9 +27,13 @@ interface Props {
   onRematch: (next: MatchSetup) => void;
   onNewMatch: () => void;
   onSaved: (next: SavedData) => void;
+  /** 先攻を変える(1 枚目を置くまで) */
+  onFirst: (first: Player) => void;
+  /** 同じ設定の最初の対局からやり直す */
+  onRestart: () => void;
 }
 
-export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRematch, onNewMatch, onSaved }: Props) {
+export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRematch, onNewMatch, onSaved, onFirst, onRestart }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const [adhoc, setAdhoc] = useState<CardDef | null>(null);
   // reveal = 相手の裏向きの手札を開く、swap = スワップで来たカードを選ぶ、mismatch = 入力した手札と違うカードが出た
@@ -148,6 +152,21 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
     reset();
   };
 
+  // 置く前のスワップや開いたカードの記録は手番を見ないので、先攻を変えてもそのまま残る
+  const chooseFirst = (first: Player) => {
+    onFirst(first);
+    reset();
+  };
+
+  const restart = () => {
+    setFixMode(false);
+    setSwapMode(false);
+    setSwapIn(null);
+    setCopied(false);
+    reset();
+    onRestart();
+  };
+
   const copyDiscrepancy = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify({ setup, events: events.slice(0, view.applied) }));
@@ -158,6 +177,24 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
   };
 
   const recommendedMove = solver.analysis ? recommended(solver.analysis) : null;
+  // 「おすすめ通りに打った」のボタンが出ている時だけ、Enter でも同じことをする
+  const enterMove = myTurn && position && !swapMode && !solver.error ? recommendedMove : null;
+
+  useEffect(() => {
+    if (!enterMove) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      const t = e.target;
+      if (t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || (t instanceof HTMLInputElement && t.type !== 'checkbox')) return;
+      // マウスで押したボタン(「1 手戻す」など)にはフォーカスが残るので、既定の動作を止めないとそのボタンがもう一度押される
+      e.preventDefault();
+      apply(enterMove);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // apply は描画のたびに作り直されるので、依存配列は付けずに毎回付け直す
+  });
 
   const baseCount = setup.myHand.length + setup.oppSlots.filter((c) => c !== null).length + setup.oppPool.length;
   const unlisted = view.cards.slice(baseCount);
@@ -189,6 +226,7 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
         </div>
         <div className="toolbar-actions">
           <button type="button" className="btn-quiet" onClick={undo} disabled={view.applied === 0}>1 手戻す</button>
+          <button type="button" className="btn-quiet" onClick={restart} disabled={events.length === 0 && setup.round === 0}>はじめから</button>
           {view.placed === 0 && !view.finished && (
             <button type="button" className={`btn-quiet${swapMode ? ' is-on' : ''}`} aria-pressed={swapMode} onClick={toggleSwap}>スワップ</button>
           )}
@@ -197,6 +235,17 @@ export function PlayScreen({ setup, events, priorLevel, saved, onEvents, onRemat
           <button type="button" className="btn-quiet" onClick={onNewMatch}>設定に戻る</button>
         </div>
       </div>
+
+      {view.placed === 0 && !view.finished && (
+        <div className="first-pick">
+          <span className="first-pick-label">先攻</span>
+          <div className="segmented" role="group" aria-label="先攻">
+            <button type="button" className={setup.first === 0 ? 'seg-on seg-blue' : ''} aria-pressed={setup.first === 0} onClick={() => chooseFirst(0)}>自分</button>
+            <button type="button" className={setup.first === 1 ? 'seg-on seg-red' : ''} aria-pressed={setup.first === 1} onClick={() => chooseFirst(1)}>相手</button>
+          </div>
+          <span className="muted">1 枚目を置くまで変えられます</span>
+        </div>
+      )}
 
       {fixMode && <p className="note note-warn">盤面のカードをタップすると、青と赤が入れ替わります。ゲームの表示に合わせてください。</p>}
       {swapMode && (

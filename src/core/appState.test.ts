@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  EMPTY_DRAFT, INITIAL_STATE, applyNpc, clearOppSlot, draftToSetup, parseAppState, revealPoolCard, setupWarnings, toggleRule,
+  EMPTY_DRAFT, INITIAL_STATE, applyNpc, clearOppSlot, draftToSetup, parseAppState, restartMatch, revealPoolCard, setupWarnings, toggleRule,
   type AppState,
 } from './appState';
 import { replay } from './match';
@@ -83,5 +83,17 @@ describe('保存と復元', () => {
     expect(partial.phase).toBe('setup');
     expect(partial.draft.myCards[0]).toEqual(c(1));
     expect(partial.draft.myCards[1]).toBeNull();
+  });
+});
+
+describe('はじめから', () => {
+  it('サドンデスの再戦中でも、下書きの手札で最初の対局に戻る', () => {
+    const draft = { ...EMPTY_DRAFT, myCards: [c(1), c(2), c(3), c(4), c(5)], ruleIds: [5], first: 1 as const };
+    const setup = { ...draftToSetup(draft)!, myHand: [c(9), c(9), c(9), c(9), c(9)], round: 2, first: 0 as const };
+    const next = restartMatch({ phase: 'play', draft, setup, events: [{ t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 }] });
+    expect(next.events).toEqual([]);
+    expect(next.setup!.round).toBe(0);
+    expect(next.setup!.myHand).toEqual(draft.myCards);
+    expect(next.setup!.first).toBe(1);
   });
 });

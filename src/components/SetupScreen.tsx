@@ -139,14 +139,6 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
         />
       </section>
 
-      <section>
-        <h2>先攻</h2>
-        <div className="segmented segmented-big" role="group" aria-label="先攻">
-          <button type="button" className={draft.first === 0 ? 'seg-on seg-blue' : ''} aria-pressed={draft.first === 0} onClick={() => onDraft({ ...draft, first: 0 })}>自分</button>
-          <button type="button" className={draft.first === 1 ? 'seg-on seg-red' : ''} aria-pressed={draft.first === 1} onClick={() => onDraft({ ...draft, first: 1 })}>相手</button>
-        </div>
-      </section>
-
       {warnings.map((w) => <p className="note note-warn" key={w}>{w}</p>)}
 
       <div className="start-bar">
