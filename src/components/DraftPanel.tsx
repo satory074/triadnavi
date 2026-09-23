@@ -12,7 +12,7 @@ import type { CardDef } from '../core/types';
 import { preMatchRules, toDeckCards, withPrior } from '../data';
 import { useDeckSearch, type DeckSearchRequest } from '../hooks/useDeckSearch';
 import { CardEditor } from './CardEditor';
-import { CardView } from './CardView';
+import { DeckStrip } from './DeckStrip';
 import { DeckResult } from './DeckAdvisor';
 
 interface Props {
@@ -99,11 +99,13 @@ function DraftRound({ round, draft, onDraft }: RoundProps) {
               セット {i + 1}
               {complete && i === best && <span className="badge">おすすめ</span>}
             </p>
-            <div className="draft-cards">
-              {s.map((card, j) => (
-                <CardView key={j} card={card} empty owner={0} size="sm" onClick={() => setTarget({ set: i, slot: j })} ariaLabel={card ? `セット ${i + 1} の ${j + 1} 枚目を変更` : `セット ${i + 1} の ${j + 1} 枚目を入力`} />
-              ))}
-            </div>
+            <DeckStrip
+              cards={s}
+              empty
+              className="draft-cards"
+              onSlot={(j) => setTarget({ set: i, slot: j })}
+              slotLabel={(j, card) => (card ? `セット ${i + 1} の ${j + 1} 枚目を変更` : `セット ${i + 1} の ${j + 1} 枚目を入力`)}
+            />
             {complete && <p className="draft-score muted">点 {ranked.find((r) => r.index === i)!.score.toFixed(2)}</p>}
             <button type="button" className={complete && i === best ? 'btn btn-primary btn-sm' : 'btn btn-sm'} disabled={!complete} onClick={() => take(i)}>
               このセットを取った

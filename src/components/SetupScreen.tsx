@@ -4,6 +4,7 @@ import {
   type SetupDraft,
 } from '../core/appState';
 import { DECK_PROBLEM_TEXT, type Collection } from '../core/collection';
+import { moveItem } from '../core/reorder';
 import type { SavedData, SavedDeck } from '../core/presets';
 import { renameDeck, sameCard } from '../core/presets';
 import { RULE_ID, rulesFromIds } from '../core/rules';
@@ -21,6 +22,7 @@ import { OpponentPanel } from './OpponentPanel';
 import { RuleChips } from './RuleChips';
 import { RuleNames } from './RuleNames';
 import { TournamentPicker } from './TournamentPicker';
+import { useMoveFocus, useReorder } from '../hooks/useReorder';
 
 interface Props {
   draft: SetupDraft;
@@ -52,7 +54,8 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
   const filled = draft.myCards.filter((c) => c !== null).length;
   // 大会の固定ルールと違うチップが選ばれている(ルーレットの大会は、対戦が始まってから結果を足すので除く)
   const ruleDrift = competition !== undefined && !competition.rules.includes(RULE_ID.roulette)
-    && JSON.stringify([...draft.ruleIds].sort((a, b) => a - b)) !== JSON.stringify(selectableRules(competition.rules).sort((a, b) => a - b));
+    && (JSON.stringify([...draft.ruleIds].sort((a, b) => a - b)) !== JSON.stringify(selectableRules(competition.rules).sort((a, b) => a - b))
+      || draft.swap !== competition.rules.includes(RULE_ID.swap));
 
   const pickNpc = (npc: NpcInfo) => {
     const { fixed, variable } = npcCards(npc);
@@ -81,6 +84,18 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
     } else {
       if (!draft.oppPool.some((c) => sameCard(c, card))) onDraft({ ...draft, oppPool: [...draft.oppPool, card].slice(0, 20) });
     }
+  };
+
+  // 手札の並べ替え。オーダーでは並び順がそのまま出す順になるので、入れ直さずに動かせるようにする
+  const moveCard = (from: number, to: number) => {
+    if (to < 0 || to >= draft.myCards.length) return;
+    onDraft({ ...draft, myCards: moveItem(draft.myCards, from, to) });
+  };
+  const reorder = useReorder({ axis: 'x', count: draft.myCards.length, onMove: moveCard });
+  const focus = useMoveFocus();
+  const moveByButton = (from: number, to: number, side: 'l' | 'r') => {
+    focus.after(`${to}:${side}`, `${to}:${side === 'l' ? 'r' : 'l'}`);
+    moveCard(from, to);
   };
 
   const clearMy = (slot: number) => {
@@ -163,7 +178,7 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
             )}
           </p>
         )}
-        <RuleChips ruleIds={draft.ruleIds} onToggle={(id) => onDraft({ ...draft, ruleIds: toggleRule(draft.ruleIds, id) })} />
+        <RuleChips ruleIds={draft.ruleIds} onToggle={(id) => onDraft({ ...draft, ruleIds: toggleRule(draft.ruleIds, id) })} swap={draft.swap} onSwap={(swap) => onDraft({ ...draft, swap })} />
         {rules.fallenAce && (rules.same || rules.plus) && (
           <label className="check">
             <input type="checkbox" checked={draft.fallenAceInCombo} onChange={(e) => onDraft({ ...draft, fallenAceInCombo: e.target.checked })} />
@@ -176,17 +191,29 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
         <h2>{drafting ? 'ドラフトで組む自分の手札' : '自分の手札'}</h2>
         {drafting && filled < 5 && <DraftPanel draft={draft} onDraft={onDraft} />}
         <div className="hand-row">
-          {draft.myCards.map((card, i) => (
-            <div className="slot" key={i}>
-              <CardView card={card} empty owner={0} onClick={() => setTarget({ kind: 'my', slot: i })} ariaLabel={card ? `自分の ${i + 1} 枚目を変更` : `自分の ${i + 1} 枚目を入力`} />
-              {card ? (
-                <button type="button" className="btn-tertiary slot-remove" onClick={() => clearMy(i)} aria-label={`自分の ${i + 1} 枚目を外す`}>外す</button>
-              ) : (
-                <span className="slot-action">入力</span>
-              )}
-            </div>
-          ))}
+          {draft.myCards.map((card, i) => {
+            const { className, ...drag } = reorder.bind(i);
+            return (
+              <div className={`slot ${className}`} key={i} {...drag}>
+                <CardView card={card} empty owner={0} onClick={() => setTarget({ kind: 'my', slot: i })} ariaLabel={card ? `自分の ${i + 1} 枚目を変更` : `自分の ${i + 1} 枚目を入力`} />
+                <div className="slot-move">
+                  <button type="button" className="btn-tertiary slot-move-btn" disabled={i === 0}
+                    ref={focus.register(`${i}:l`)}
+                    onClick={() => moveByButton(i, i - 1, 'l')} aria-label={`自分の ${i + 1} 枚目を左へ`}>←</button>
+                  <button type="button" className="btn-tertiary slot-move-btn" disabled={i === draft.myCards.length - 1}
+                    ref={focus.register(`${i}:r`)}
+                    onClick={() => moveByButton(i, i + 1, 'r')} aria-label={`自分の ${i + 1} 枚目を右へ`}>→</button>
+                </div>
+                {card ? (
+                  <button type="button" className="btn-tertiary slot-remove" onClick={() => clearMy(i)} aria-label={`自分の ${i + 1} 枚目を外す`}>外す</button>
+                ) : (
+                  <span className="slot-action">入力</span>
+                )}
+              </div>
+            );
+          })}
         </div>
+        <p className="note">札はドラッグでも、下の ← → でも並べ替えられます。</p>
         {/* ドラフトのデッキはレアリティの制限を見ない(貸し出しのカードで、★1〜★5 が 1 枚ずつ) */}
         {!drafting && handProblems(draft.myCards).map((p) => (
           <p className="note note-warn" key={p}>{DECK_PROBLEM_TEXT[p]}。ゲーム内ではこのデッキを組めません。</p>
@@ -206,6 +233,7 @@ export function SetupScreen({ draft, saved, collection, onDraft, onSaved, onStar
             onSave={saveDeck}
             onRename={(id, name) => onSaved(renameDeck(saved, id, name))}
             onDelete={(id) => onSaved({ ...saved, decks: saved.decks.filter((d) => d.id !== id) })}
+            onReorder={(decks) => onSaved({ ...saved, decks })}
           />
         )}
       </section>

@@ -23,6 +23,7 @@
   --paper-dim: #9bb3bc;
   --good: #7ad6a2;
   --bad: #f09a93;
+  --draw: #ece46f; /* 引き分け。金(--gilt)とは色相(56° / 42°)と明るさで分ける */
   --font-num: 'Barlow Semi Condensed', 'Arial Narrow', system-ui, sans-serif;
   --font-display: 'Dela Gothic One', 'Hiragino Kaku Gothic ProN', sans-serif;
   --font-body: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', system-ui, sans-serif;
@@ -609,7 +610,9 @@ input:not([type]) {
 .draft-cards {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 4.6rem;
+  /* .deck-strip の 5 列を打ち消す。セットは 1〜2 枚なので、枚数に合わせた固定幅の列にする */
+  grid-template-columns: none;
+  grid-auto-columns: 5.2rem;
   justify-content: center;
   gap: 0.4rem;
 }
@@ -682,6 +685,17 @@ input:not([type]) {
   color: var(--paper-dim);
 }
 
+/* スワップ(対戦前に決まるルール)。エンジンのルールとは別の行に置き、注意書きを下にぶら下げる */
+.rule-group-pre {
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.rule-group-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .decks {
   margin-top: 0.7rem;
 }
@@ -695,8 +709,30 @@ input:not([type]) {
 }
 
 .deck-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'handle load'
+    '. actions';
+  align-items: center;
+}
+
+/* 名前を変更中の行は入力欄 1 つだけなので、格子に乗せない */
+.deck-list li.deck-editing {
   display: flex;
   align-items: center;
+}
+
+.deck-handle { grid-area: handle; }
+.deck-load { grid-area: load; }
+
+.deck-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  padding: 0 0.6rem 0.4rem;
 }
 
 .deck-list li + li {
@@ -705,15 +741,7 @@ input:not([type]) {
 
 .deck-load {
   grid-template-columns: 1fr;
-  flex: 1;
   min-width: 0;
-}
-
-.deck-load .result-sides {
-  font-family: var(--font-body);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .deck-save,
@@ -763,6 +791,19 @@ input:not([type]) {
 
 .pool-pick {
   grid-template-columns: repeat(auto-fill, minmax(4.6rem, 1fr));
+}
+
+/* デッキ 1 つを絵つきの札で横一列に。札が小さいので名前は重ねずに下へ出す(DeckStrip) */
+.deck-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: start;
+  gap: 0.4rem;
+}
+
+/* デッキ評価の「登録済みのデッキ」。広い幅では帯と要約を同じ行に残す */
+.deck-strip-mini {
+  max-width: 20rem;
 }
 
 .pool-name {
@@ -891,12 +932,6 @@ input:not([type]) {
   min-width: 0;
 }
 
-/* カード名は折り返して 5 枚とも見せる(切り詰めると狭い幅で 2 枚しか読めない) */
-.advisor-mine-name .result-sides {
-  font-family: var(--font-body);
-  font-size: var(--fs-xs);
-}
-
 .advisor-mine .outcome-bar {
   flex: 1 1 6rem;
   min-width: 6rem;
@@ -945,7 +980,7 @@ input:not([type]) {
 }
 
 .outcome-win { background: var(--good); }
-.outcome-draw { background: var(--paper-dim); }
+.outcome-draw { background: var(--draw); }
 .outcome-loss { background: var(--bad); }
 
 .advisor-lines {
@@ -1275,6 +1310,57 @@ textarea {
   resize: vertical;
 }
 
+/* ---- 並べ替え(自分の手札 / 保存デッキの一覧) ---- */
+.reorder-item.is-dragging {
+  opacity: 0.85;
+}
+
+.reorder-item.is-over {
+  outline: 2px dashed var(--line-strong);
+  outline-offset: 2px;
+}
+
+/* 掴む所。ここだけ touch-action: none なので、一覧の他の場所からは今まで通り縦スクロールできる */
+.deck-drag {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  min-height: 2.75rem;
+  color: var(--paper-dim);
+  cursor: grab;
+  user-select: none;
+}
+
+.deck-handle {
+  display: flex;
+  align-items: center;
+  padding-left: 0.2rem;
+}
+
+.deck-move-btn {
+  min-width: 2.25rem;
+  min-height: 2.75rem;
+  padding: 0 0.3rem;
+}
+
+/* 札の下の ← →。390px の端末では 1 スロット 67px しかないので、横に 2 つ並べると 44px を割る */
+.slot-move {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.15rem;
+}
+
+.slot-move-btn {
+  min-height: 2.75rem;
+  padding: 0.1rem;
+}
+
+@media (max-width: 32rem) {
+  .slot-move {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---- カード ---- */
 .hand-row {
   display: grid;
@@ -1283,13 +1369,12 @@ textarea {
 }
 
 .hand-opp {
-  max-width: 19rem;
-  margin: 0 auto 0.6rem;
+  margin: 0 0 0.6rem;
   /* 開いた札の下に「戻す」が付くと高さが変わるので、札の上端を揃える */
   align-items: start;
 }
 
-/* 相手の候補。手札と取り違えないよう、点線の枠で囲って見出しを付け、札も手札より一回り小さくする(6 列)。幅は相手の手札と同じ */
+/* 相手の候補。手札と取り違えないよう、点線の枠で囲って見出しを付け、札も手札より一回り小さくする(6 列)。手札より狭くして区別する */
 .opp-pool {
   max-width: 19rem;
   margin: -0.2rem auto 0.6rem;
@@ -1438,6 +1523,17 @@ textarea {
   font-size: 30cqw;
 }
 
+/* 名前を出す札は、名前(最大 2 行)の分だけ数字の下端を上げる。小さい札は数字が下端まで広がっているので特に要る */
+.has-name .card-sides {
+  inset: 6% 8% 30%;
+}
+
+.card-sm.has-name .card-sides {
+  inset: 8% 8% 30%;
+}
+
+
+
 /* 絵の上でも数字を読めるように、数字ごとに暗い円を敷く(中央は空けて絵柄を隠さない)。絵が無い時は今まで通り */
 .has-art .card-sides {
   text-shadow: 0 0 0.15em #000, 0 0 0.15em #000, 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
@@ -1544,6 +1640,38 @@ textarea {
   padding: 0.4em 4% 0.3em;
   max-height: 3em;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.75) 65%, transparent);
+}
+
+/* 対局画面の手札(1 枚 67〜78px)では 11.5cqw = 9px になって読めない。
+   12px まで上げると 2 行が下辺の数字に重なるので、数字の下端を上げ、名前には帯を敷いて 2 行で打ち切る。
+   390px の端末では列が 67px しかないので、max() で 12px を下回らないようにする。
+   .has-art .card-name と同じ詳細度なので、必ずその後ろに置くこと */
+.hand-opp .card-name,
+.hand-my .card-name {
+  font-size: max(var(--fs-xs), 15cqw);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* 下の余白は 0 にする: overflow: hidden は padding box で切るので、余白があると 3 行目の頭が覗く */
+  padding: 0.15em 4% 0;
+  /* 標準の line-clamp を書くと display が flow-root になり「切るだけ」になる(3 行目が覗く)。
+     -webkit- の実装は 3 行目を箱から外すので、こちらだけを使う */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  max-height: none;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 60%, transparent);
+}
+
+/* 下端は 38% だが、名前は max() で 12px を下回らないので、小さい札では割合だけだと足りない(390px の端末で重なった)。
+   2 行 + 余白の実寸 34px を下限にする */
+.hand-opp .has-name .card-sides,
+.hand-my .has-name .card-sides {
+  inset: 6% 8% max(38%, 34px);
+}
+
+.hand-opp .card-sm.has-name .card-sides {
+  inset: 8% 8% max(38%, 34px);
 }
 
 /* なぜ裏返ったかの表示。数字と重ならないよう、カード下端の帯にする(この時は名前を出さない) */
@@ -1910,7 +2038,7 @@ textarea {
 }
 
 .cls-win { color: var(--good); }
-.cls-draw { color: var(--paper); }
+.cls-draw { color: var(--draw); }
 .cls-loss,
 .cls-notWin { color: var(--bad); }
 
@@ -2015,7 +2143,7 @@ textarea {
 }
 
 .result-win .result-title { color: var(--good); }
-.result-draw .result-title { color: var(--paper); }
+.result-draw .result-title { color: var(--draw); }
 .result-loss .result-title { color: var(--bad); }
 
 .result-score {
@@ -2225,9 +2353,9 @@ dialog.modal::backdrop {
   font-size: var(--fs-sm);
 }
 
-/* 相手の手札と同じ幅。40rem に 5 枚だと大きすぎる */
+/* 40rem に 5 枚だと大きすぎる。カード名が折れすぎない幅(1 枚 70px 前後)にする */
 .hist-cards {
-  max-width: 19rem;
+  max-width: 24rem;
   margin: 0.5rem 0;
 }
 

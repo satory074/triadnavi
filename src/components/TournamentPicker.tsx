@@ -1,5 +1,5 @@
 import type { SetupDraft } from '../core/appState';
-import { PRE_MATCH_RULE_IDS, RULE_NAMES } from '../core/rules';
+import { PRE_MATCH_RULE_IDS, RULE_ID, RULE_NAMES } from '../core/rules';
 import { BATTLEHALL_NPCS, cardById, competitionById, npcById, COMPETITIONS, type CompetitionInfo, type NpcInfo } from '../data';
 import { RuleNames } from './RuleNames';
 
@@ -19,7 +19,9 @@ export function TournamentPicker({ draft, onPick, onNpc, onPlayer }: Props) {
   const current = competitionById(draft.tournamentId);
   const npc = draft.npcId === null ? undefined : npcById(draft.npcId);
   const inHall = npc !== undefined && BATTLEHALL_NPCS.some((n) => n.id === npc.id);
-  const pre = current?.rules.filter((r) => PRE_MATCH_RULE_IDS.includes(r)) ?? [];
+  // スワップは applyTournament が下のルールに入れるので、注意書きは分ける
+  const pre = current?.rules.filter((r) => PRE_MATCH_RULE_IDS.includes(r) && r !== RULE_ID.swap) ?? [];
+  const preSwap = current?.rules.includes(RULE_ID.swap) === true;
 
   return (
     <div className="tournament-picker">
@@ -38,6 +40,11 @@ export function TournamentPicker({ draft, onPick, onNpc, onPlayer }: Props) {
       {current && pre.length > 0 && (
         <p className="note note-warn">
           この大会には <RuleNames ids={pre} /> があります。対戦が始まってから、実際に決まったルールと手札を入れてください。
+        </p>
+      )}
+      {preSwap && (
+        <p className="note note-warn">
+          スワップは下の「この対戦のルール」に入れてあります。対戦が始まったら、対局画面の「スワップ」で交換した 2 枚を入れてください。
         </p>
       )}
 

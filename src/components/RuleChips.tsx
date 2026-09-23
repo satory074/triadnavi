@@ -5,6 +5,9 @@ import { Tip } from './Tip';
 interface Props {
   ruleIds: readonly number[];
   onToggle: (id: number) => void;
+  /** スワップ(対戦前に決まるルール)。onSwap を渡さない画面ではチップも説明も出さない */
+  swap?: boolean;
+  onSwap?: (next: boolean) => void;
 }
 
 /** 独立して選べるルール */
@@ -36,8 +39,10 @@ const ALL_IDS: readonly number[] = [...TOGGLES, ...GROUPS.flatMap((g) => g.ids)]
  * ルールの選択(設定画面と、対局中の「ルールを変更」)。マウスを乗せるとルールの説明が出る。
  * チップのタップはルールの切り替えなので、タッチの端末向けに説明の一覧を <details> に畳んで添える
  */
-export function RuleChips({ ruleIds, onToggle }: Props) {
+export function RuleChips({ ruleIds, onToggle, swap = false, onSwap }: Props) {
   const { id: tipId, tip, bind } = useHoverTip();
+  // スワップはエンジンに効かないので、エンジンのルールとは別のブロックに置く
+  const helpIds = onSwap ? [...ALL_IDS, RULE_ID.swap] : ALL_IDS;
   return (
     <div className="rule-picker" role="group" aria-label="有効なルール">
       <div className="chips">
@@ -85,10 +90,21 @@ export function RuleChips({ ruleIds, onToggle }: Props) {
           );
         })}
       </div>
+      {onSwap && (
+        <div className="rule-group rule-group-pre">
+          <span className="rule-group-label">対戦前</span>
+          <div className="chips">
+            <button type="button" className={`chip${swap ? ' chip-on' : ''}`} aria-pressed={swap} onClick={() => onSwap(!swap)} {...bind(String(RULE_ID.swap), RULE_HELP[RULE_ID.swap])}>
+              {RULE_NAMES[RULE_ID.swap]}
+            </button>
+          </div>
+          <p className="note rule-group-note">対戦が始まる時に 1 枚交換されます。デッキの評価に反映します(交換された 2 枚は、対局画面の「スワップ」で入れてください)。</p>
+        </div>
+      )}
       <details className="rule-help">
         <summary>ルールの説明</summary>
         <dl>
-          {ALL_IDS.map((id) => (
+          {helpIds.map((id) => (
             <div key={id} className="rule-help-row">
               <dt>{RULE_NAMES[id]}</dt>
               <dd>{RULE_HELP[id]}</dd>

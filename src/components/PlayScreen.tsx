@@ -170,7 +170,9 @@ export function PlayScreen({ setup, events, prior, title, saved, onEvents, onRem
 
   const onCell = (cell: number) => {
     if (view.state.board[cell] || view.finished || swapMode) return;
-    place(view.turn, cell, selected, adhoc);
+    // オーダーの 1 局目は出すカードが決まっているので、選択より優先する(自分の番だけ。相手の手は従来どおり選んでもらう)
+    const forcedNow = view.turn === 0 ? orderCard : null;
+    place(view.turn, cell, forcedNow ?? selected, adhoc);
   };
 
   const apply = (m: MoveEval) => place(0, m.move.cell, m.move.card, null);
@@ -239,7 +241,10 @@ export function PlayScreen({ setup, events, prior, title, saved, onEvents, onRem
   const unlisted = view.cards.slice(baseCount);
   const npcKey = setup.npcId !== undefined ? String(setup.npcId) : null;
   const rematch = buildRematch(setup, view);
-  const canPlace = !view.finished && !swapMode && (selected !== null || adhoc !== null);
+  // オーダー(1 局目)は出すカードが決まっているので、盤面のタップだけで置ける。myTurn を必ず挟む:
+  // orderForcedCard は手番を見ないので、これが無いと相手の手を記録するタップで自分のカードが置かれる
+  const orderPlaceable = myTurn && !swapMode && orderCard !== null;
+  const canPlace = !view.finished && !swapMode && (selected !== null || adhoc !== null || orderPlaceable);
 
   // 手番の案内は、タップする手札の隣に出す(相手の手札の下 / 自分の手札の上)。両方の枠を常に描いて、出たり消えたりで盤面が動かないようにする
   const oppBanner = view.finished || myTurn
@@ -257,6 +262,9 @@ export function PlayScreen({ setup, events, prior, title, saved, onEvents, onRem
         ? ''
         : forcedMode && forcedCard === undefined
           ? 'あなたの番です。ゲームに指定されたカードをタップしてください'
+          // オーダー(1 局目)は出すカードが決まっているので、そのカード名を出してマスだけ押してもらう
+          : orderCard !== null
+            ? `オーダー: ${view.cards[orderCard].label ?? view.cards[orderCard].sides.join('/')} を置くマスをタップしてください`
           : selected !== null && !forcedMode
             ? '置いたマスをタップしてください'
             : 'あなたの番です';
@@ -358,7 +366,7 @@ export function PlayScreen({ setup, events, prior, title, saved, onEvents, onRem
             {view.myHand.map((i) => {
               const locked = orderCard !== null && orderCard !== i;
               return (
-                <CardView key={i} card={view.cards[i]} owner={0} shift={shiftOf(i)} selected={selected === i}
+                <CardView key={i} card={view.cards[i]} owner={0} shift={shiftOf(i)} selected={selected === i || (orderPlaceable && orderCard === i)}
                   recommended={myTurn && recommendedMove?.move.card === i}
                   dimmed={swapMode ? !swapIn : !myTurn || locked}
                   onClick={swapMode ? (swapIn ? () => giveMyCard(i) : undefined) : myTurn && !locked ? () => setSelected(selected === i && !forcedMode ? null : i) : undefined} />
@@ -465,7 +473,7 @@ function OppPool({ view, shiftOf, myTurn, swapMode, open, prior, selected, onPic
       {hasPool ? (
         <div className="opp-pool-row">
           {view.oppPool.map((i) => (
-            <CardView key={i} card={view.cards[i]} owner={1} size="sm" shift={shiftOf(i)} selected={selected === i} dimmed={!onPick}
+            <CardView key={i} card={view.cards[i]} owner={1} size="sm" showName={false} shift={shiftOf(i)} selected={selected === i} dimmed={!onPick}
               onClick={onPick ? () => onPick(i) : undefined} />
           ))}
           {onPick && (

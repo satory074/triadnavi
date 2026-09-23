@@ -32,8 +32,12 @@ export function CardView({ card, empty, owner, size = 'md', selected, recommende
   const resolved = artOn && card && !partial ? artIdOf(card) : undefined;
   const artId = resolved === failedArt ? undefined : resolved;
 
+  // 名前を出すかは呼び出し側が決める(小さい札でも出す。数字の領域を下げる CSS が has-name を見る)
+  const nameShown = showName && !badge && !!card?.label;
+
   const cls = [
     'card', `card-${size}`, `owner-${owner}`,
+    nameShown ? 'has-name' : '',
     card === null && !partial ? (empty ? 'card-empty' : 'card-hidden') : '',
     artId !== undefined ? 'has-art' : '',
     selected ? 'is-selected' : '', recommended ? 'is-recommended' : '', dimmed ? 'is-dimmed' : '',
@@ -85,7 +89,7 @@ export function CardView({ card, empty, owner, size = 'md', selected, recommende
       {card && card.type !== 0 && <span className="card-type">{CARD_TYPE_NAMES[card.type]}</span>}
       {ownerMark && (owner === 0 || owner === 1) && <span className="card-owner" aria-hidden="true">{owner === 0 ? '自' : '相'}</span>}
       {badge && <span className="card-badge">{badge}</span>}
-      {showName && !badge && size !== 'sm' && card?.label && <span className="card-name">{card.label}</span>}
+      {nameShown && <span className="card-name">{card?.label}</span>}
     </>
   );
 

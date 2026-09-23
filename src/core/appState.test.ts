@@ -62,6 +62,22 @@ describe('NPC の適用', () => {
     expect(setMode(t, 'free')).toMatchObject({ mode: 'free', tournamentId: null, ruleIds: [2, 6] });
   });
 
+  it('スワップは NPC / 大会から自動で入り、外すとデッキの評価にも効かなくなる', () => {
+    const swapNpc = { ...npc, rules: [4, 14] };
+    // 通常モード: NPC のスワップが下書きに入り、評価はそれを読む(事前ルールの引数ではない)
+    const d = applyNpc(EMPTY_DRAFT, swapNpc, []);
+    expect(d).toMatchObject({ ruleIds: [4], swap: true });
+    expect(matchupFromDraft(d, [4, 14])).toMatchObject({ swap: true });
+    expect(matchupFromDraft({ ...d, swap: false }, [4, 14])).toMatchObject({ swap: false });
+    expect(matchupFromDraft({ ...EMPTY_DRAFT, swap: true }, [])).toMatchObject({ swap: true });
+    // NPC を外すと通常モードでは消える。大会モードでは大会のルールなので、NPC を選んでも外しても変わらない
+    expect(clearNpc(d).swap).toBe(false);
+    const t = applyTournament(EMPTY_DRAFT, { id: 2, rules: [3, 14] });
+    expect(t.swap).toBe(true);
+    expect(applyNpc(t, npc, []).swap).toBe(true);
+    expect(clearNpc(applyNpc(t, npc, [])).swap).toBe(true);
+  });
+
   it('見えている候補を手札へ移し、外すと候補へ戻る', () => {
     const d = revealPoolCard(applyNpc(EMPTY_DRAFT, npc, []), 1);
     expect(d.oppCards).toEqual([c(1), c(2), c(3), c(5), null]);
@@ -117,8 +133,8 @@ describe('保存と復元', () => {
     expect(partial.phase).toBe('setup');
     expect(partial.draft.myCards[0]).toEqual(c(1));
     expect(partial.draft.myCards[1]).toBeNull();
-    // 大会の項目が無い/壊れている古い保存は通常モードとして読む
-    expect(partial.draft).toMatchObject({ mode: 'free', tournamentId: null, openRulesetId: null });
+    // 大会の項目が無い/壊れている古い保存は通常モードとして読む。swap のキーが無い保存も false(保存形式は v1 のまま)
+    expect(partial.draft).toMatchObject({ mode: 'free', tournamentId: null, openRulesetId: null, swap: false });
   });
 });
 
@@ -180,5 +196,8 @@ describe('対局中のルール変更', () => {
     const reloaded = parseAppState(JSON.stringify(next));
     expect(reloaded.setup!.rules).toEqual(next.setup!.rules);
     expect(reloaded.setup!.options.fallenAceInCombo).toBe(false);
+
+    // スワップ(14)はエンジンに効かないルールなので、対局中のルール変更には紛れ込まない
+    expect(changeRules(next, [14, 4], true).draft.ruleIds).toEqual([4]);
   });
 });

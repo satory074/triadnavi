@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PRE_MATCH_RULE_IDS, RULE_NAMES } from '../core/rules';
+import { PRE_MATCH_RULE_IDS, RULE_ID, RULE_NAMES } from '../core/rules';
 import { npcById, searchNpcs, type NpcInfo } from '../data';
 import { ConfirmAction } from './ConfirmAction';
 import { RuleNames } from './RuleNames';
@@ -54,7 +54,9 @@ export function NpcPicker({ npcId, onPick, onClear }: Props) {
 
   if (!npc) return search;
 
-  const pre = npc.rules.filter((r) => PRE_MATCH_RULE_IDS.includes(r));
+  // スワップは applyNpc が下のルールに入れるので、注意書きは「自分で入れてください」とは別の文にする
+  const pre = npc.rules.filter((r) => PRE_MATCH_RULE_IDS.includes(r) && r !== RULE_ID.swap);
+  const preSwap = npc.rules.includes(RULE_ID.swap);
   return (
     <div className="npc-selected">
       <div className="npc-line">
@@ -74,6 +76,11 @@ export function NpcPicker({ npcId, onPick, onClear }: Props) {
       {pre.length > 0 && (
         <p className="note note-warn">
           この NPC には <RuleNames ids={pre} /> があります。対戦が始まってから、実際に決まったルールと手札を入れてください。
+        </p>
+      )}
+      {preSwap && (
+        <p className="note note-warn">
+          スワップは下の「この対戦のルール」に入れてあります。対戦が始まったら、対局画面の「スワップ」で交換した 2 枚を入れてください。
         </p>
       )}
       {npc.usesRegional && <p className="note note-warn">流行ルールが適用される NPC です。今日の流行ルールも下で追加してください。</p>}

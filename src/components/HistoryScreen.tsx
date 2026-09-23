@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MAX_HISTORY, entryOutcome, rematchCount, tally, type HistoryEntry, type MatchHistory } from '../core/history';
-import { cardName, entryRuleIds, formatDateTime, historyJson, historyTitle, historyTsv, opponentLabel, resultText } from '../data/historyExport';
-import { CardView } from './CardView';
+import { entryRuleIds, formatDateTime, historyJson, historyTitle, historyTsv, opponentLabel, resultText } from '../data/historyExport';
+import { DeckStrip } from './DeckStrip';
 import { ConfirmAction } from './ConfirmAction';
 import { OutcomeBar } from './OutcomeBar';
 import { RuleNames } from './RuleNames';
@@ -120,14 +120,7 @@ function HistoryItem({ entry, current, onRemove }: { entry: HistoryEntry; curren
       <p className="muted hist-meta">
         相手: {opponentLabel(entry)} / 先攻: {first.setup.first === 0 ? '自分' : '相手'} / {ruleIds.length > 0 ? <RuleNames ids={ruleIds} /> : '追加ルールなし'}
       </p>
-      <div className="hand-row hist-cards">
-        {first.setup.myHand.map((c, i) => (
-          <div className="slot" key={i}>
-            <CardView card={c} owner={0} size="sm" showName={false} />
-            <span className="pool-name">{cardName(c)}</span>
-          </div>
-        ))}
-      </div>
+      <DeckStrip cards={first.setup.myHand} className="hist-cards" />
       <p className={`hist-result${outcome ? ` is-${outcome}` : ''}`}>
         {resultText(entry)}
         {rematches > 0 && <span className="muted"> サドンデス {rematches} 回</span>}

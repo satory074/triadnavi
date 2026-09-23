@@ -10,10 +10,10 @@ import {
 } from '../core/deckSearch';
 import type { SavedDeck } from '../core/presets';
 import { percent, progressPercent } from '../core/rank';
-import { formatSides, type CardDef } from '../core/types';
+import type { CardDef } from '../core/types';
 import { ALL_DECK_CARDS, npcById, ownedCards, preMatchRules, toDeckCard, toDeckCards, withPrior } from '../data';
 import { useDeckSearch, type DeckSearchRequest } from '../hooks/useDeckSearch';
-import { CardView } from './CardView';
+import { DeckStrip } from './DeckStrip';
 import { ConfirmAction } from './ConfirmAction';
 import { OutcomeBar } from './OutcomeBar';
 
@@ -247,7 +247,7 @@ function MineList({ mine, search, running, complete, top }: MineProps) {
             <li key={i}>
               <span className="advisor-mine-name">
                 <strong>{m.names.join(' / ')}</strong>
-                <span className="result-sides">{m.cards.map((c) => c.label ?? formatSides(c.sides)).join('、')}</span>
+                <DeckStrip cards={m.cards} className="deck-strip-mini" />
               </span>
               {m.key === null ? (
                 <span className="advisor-mine-check">{seedCheckText(m.check)}</span>
@@ -295,14 +295,7 @@ export function DeckResult({ search, evaluation, context, title, onUse, replaces
           <button type="button" className="btn btn-sm" onClick={onUse}>このデッキを使う</button>
         ))}
       </div>
-      <div className="hand-row">
-        {evaluation.cards.map((c, i) => (
-          <div className="slot" key={i}>
-            <CardView card={c} owner={0} size="sm" showName={false} />
-            <span className="pool-name">{c.label ?? ''}{c.stars > 0 && <span className="coll-stars"> ★{c.stars}</span>}</span>
-          </div>
-        ))}
-      </div>
+      <DeckStrip cards={evaluation.cards} />
       <OutcomeBar win={score.win} draw={score.drawOrBetter - score.win} loss={1 - score.drawOrBetter} />
       <ul className="advisor-lines">
         {deckLines(search, evaluation).map((l) => (

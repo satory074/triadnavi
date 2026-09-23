@@ -22,6 +22,11 @@ export interface SetupDraft {
   npcId: number | null;
   /** 有効なルール(ゲームデータのルール ID)。エンジンに関係する 11 種のみ */
   ruleIds: number[];
+  /**
+   * スワップ(ルール ID 14)。対戦開始時に 1 枚交換されるルールで、エンジン(RuleSet)には効かず、デッキの評価にだけ効く。
+   * rulesFromIds / ruleIdsOf が 14 を扱わないので ruleIds には入れられない(changeRules と parseDraft で黙って消える)
+   */
+  swap: boolean;
   fallenAceInCombo: boolean;
   myCards: (CardDef | null)[];
   /** 相手の 5 スロット。分かっているカード、または null(不明) */
@@ -49,6 +54,7 @@ export const EMPTY_DRAFT: SetupDraft = {
   openRulesetId: null,
   npcId: null,
   ruleIds: [],
+  swap: false,
   fallenAceInCombo: true,
   myCards: [null, null, null, null, null],
   oppCards: [null, null, null, null, null],
@@ -95,13 +101,16 @@ export function applyNpc(draft: SetupDraft, npc: NpcLike, learned: readonly Card
   const fixed = npc.fixed.slice(0, 5);
   const oppCards: (CardDef | null)[] = [...fixed, ...Array<null>(5 - fixed.length).fill(null)];
   const pool = [...npc.variable, ...learned.filter((c) => ![...npc.fixed, ...npc.variable].some((k) => sameCard(k, c)))];
-  const ruleIds = draft.mode === 'tournament' ? draft.ruleIds : selectableRules(npc.rules);
-  return { ...draft, npcId: npc.id, oppCards, oppPool: pool, ruleIds, oppOrderKnown: false };
+  const tournament = draft.mode === 'tournament';
+  const ruleIds = tournament ? draft.ruleIds : selectableRules(npc.rules);
+  const swap = tournament ? draft.swap : npc.rules.includes(RULE_ID.swap);
+  return { ...draft, npcId: npc.id, oppCards, oppPool: pool, ruleIds, swap, oppOrderKnown: false };
 }
 
 /** NPC を外す。大会モードではルールは大会のものなので残す */
 export function clearNpc(draft: SetupDraft): SetupDraft {
-  return { ...draft, npcId: null, oppCards: [null, null, null, null, null], oppPool: [], ruleIds: draft.mode === 'tournament' ? draft.ruleIds : [] };
+  const tournament = draft.mode === 'tournament';
+  return { ...draft, npcId: null, oppCards: [null, null, null, null, null], oppPool: [], ruleIds: tournament ? draft.ruleIds : [], swap: tournament ? draft.swap : false };
 }
 
 export interface TournamentLike {
@@ -112,12 +121,12 @@ export interface TournamentLike {
 
 /** 大会を選んだ時: ルールは大会の固定ルール。相手(NPC か不明のプレイヤー)はそのまま */
 export function applyTournament(draft: SetupDraft, t: TournamentLike): SetupDraft {
-  return { ...draft, mode: 'tournament', tournamentId: t.id, openRulesetId: null, ruleIds: selectableRules(t.rules) };
+  return { ...draft, mode: 'tournament', tournamentId: t.id, openRulesetId: null, ruleIds: selectableRules(t.rules), swap: t.rules.includes(RULE_ID.swap) };
 }
 
 /** オフィシャルトーナメントのルールを選んだ時。相手は必ずドラフトの手札(不明)なので、NPC と相手の手札は消す */
 export function applyOpenRuleset(draft: SetupDraft, r: TournamentLike): SetupDraft {
-  return { ...clearNpc({ ...draft, mode: 'free' }), mode: 'open', openRulesetId: r.id, tournamentId: null, ruleIds: selectableRules(r.rules) };
+  return { ...clearNpc({ ...draft, mode: 'free' }), mode: 'open', openRulesetId: r.id, tournamentId: null, ruleIds: selectableRules(r.rules), swap: r.rules.includes(RULE_ID.swap) };
 }
 
 /** 対戦の種類を切り替える。通常に戻す時は大会の選択を忘れる(ルールと相手はそのまま残す) */
@@ -239,8 +248,9 @@ export function changeRules(state: AppState, ruleIds: readonly number[], fallenA
 }
 
 /**
- * デッキの評価に使う対戦条件。ルーレットとスワップは下書きのルールには入らない(対戦が始まってから決まる)ので、
- * 対戦前に決まっているルール(大会 / オフィシャルトーナメント / NPC の固定ルール)から受け取る。どれも無ければ空でよい。
+ * デッキの評価に使う対戦条件。ルーレットは下書きのルールには入らない(対戦が始まってから決まる)ので、
+ * 対戦前に決まっているルール(大会 / オフィシャルトーナメント / NPC の固定ルール)から本数を受け取る。どれも無ければ空でよい。
+ * スワップは下書きの swap(ルールのチップで切り替えられる。NPC / 大会を選ぶと自動で入る)から取る。
  * 候補が足りない分は handPriorOf の想定で埋める(oppPrior。代表カード oppRef は同梱データを持つ UI 側が足す)。
  */
 export function matchupFromDraft(draft: SetupDraft, preMatchRules: readonly number[]): Matchup {
@@ -253,7 +263,7 @@ export function matchupFromDraft(draft: SetupDraft, preMatchRules: readonly numb
     oppPool: draft.oppPool,
     oppUnknown,
     roulette: preMatchRules.filter((id) => id === RULE_ID.roulette).length,
-    swap: preMatchRules.includes(RULE_ID.swap),
+    swap: draft.swap,
     ...(oppUnknown > draft.oppPool.length ? { oppPrior: handPriorOf(draft) } : {}),
   };
 }
@@ -274,6 +284,7 @@ function parseDraft(x: unknown): SetupDraft {
     openRulesetId: id(o.openRulesetId),
     npcId: Number.isInteger(o.npcId) ? (o.npcId as number) : null,
     ruleIds: ruleIds.reduce<number[]>((acc, id) => (acc.includes(id) ? acc : toggleRule(acc, id)), []),
+    swap: o.swap === true,
     fallenAceInCombo: o.fallenAceInCombo !== false,
     myCards: parseSlots(o.myCards),
     oppCards: parseSlots(o.oppCards),
