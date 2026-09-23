@@ -39,15 +39,16 @@ npm run data:update  # カード/NPC/入手方法/アチーブメント/大会�
 - `core/chaos.ts` — カオスの厳密な期待値計算と悲観的下界
 - `core/match.ts` — 対局の記録(イベントソーシング)。`replay()` は参照エンジンで再生する。`unrevealCard()` は開き間違えたカードを戻す(記録を書き換える唯一の関数)
 - `core/suddenDeath.ts` — サドンデス再戦の手札の組み直し
-- `core/appState.ts` / `core/presets.ts` — アプリの状態、保存データの検証つき読み込み、トップの決定(`toTop`)、対局中のルール変更(`changeRules`)、デッキ名の変更(`renameDeck`)、対戦の種類(`mode`: 通常 / 大会 / オフィシャルトーナメント。`applyTournament` / `applyOpenRuleset` / `setMode` / `handPriorOf`)
+- `core/appState.ts` / `core/presets.ts` — アプリの状態、保存データの検証つき読み込み、トップの決定(`toTop`)、対局中のルール変更(`changeRules`)、デッキ名の変更(`renameDeck`)、対戦の種類(`mode`: 通常 / 大会 / オフィシャルトーナメント。`applyTournament` / `applyOpenRuleset` / `setMode` / `handPriorOf`)。対戦記録の id(`historyId`)は `setEvents`(最初のイベントで付ける)と `restartMatch`(終局後は外す)が扱い、`recordedMode` が記録の対象を決める。`parseSetup` は setup の検証で、`parseHistory` と共用
 - `core/prefs.ts` — 表示の設定(カードの絵を出すか)。対局の状態とは別のキーに保存する
 - `core/collection.ts` — 手持ち(所持カードの ID の集合)の保存形式・テキスト入出力と、デッキの制限(★5 は 1 枚まで、★4 以上は合わせて 2 枚まで)
+- `core/history.ts` — 対戦記録。1 entry = 1 対戦(サドンデスの再戦を `games[]` に持つ)、保存形式の検証(`parseHistory`)、対局の分を冪等に書き直す `syncGame`、大会ごとの 勝/分/負 の集計(`tally`)。上限 `MAX_HISTORY`
 - `core/deckEval.ts` — デッキの評価。対戦開始時に起こりうる状況(シナリオ)の生成と、シナリオ 1 つを空の盤面から読み切るタスク `runDeckTask()`
 - `core/deckPool.ts` — 探索の候補の絞り込み(相手のカードに対する採点)、出発点のデッキ、1 手先のデッキ
 - `core/deckSearch.ts` — デッキ探索の進行(純関数の状態機械。`scheduler.ts` と同じ流儀)と、対戦条件から探索を組み立てる `prepareDeckSearch()`
 - `core/deckRank.ts` — デッキの結果の日本語のラベルと注意書き
 - `core/draftPick.ts` — オフィシャルトーナメントのドラフト(2 枚 + 2 枚 + 1 枚 のセットを 3 回選ぶ)。提示されたセットを、想定した相手に対する静的な点で並べる `rankDraftSets`
-- `data/` — 同梱データ(`cards.json` / `npcs.json` / `sources.json` / `achievements.json` / `competitions.json`(大会 4 種) / `open-tournaments.json`(オフィシャルトーナメントのルール 10 件))と検索、対戦前に決まるルール(`preMatchRules`)、想定で埋める準備(`withPrior`)、数字 4 つからの逆引き、数字 → カード ID の対応づけ、カードの絵の ID と URL(`artIdOf` / `cardArtUrl`)、カードの入手方法(`cardSources`)、所有率とアチーブメントの判定(`ownershipPercent` / `achievementStatus`)。エンジンとソルバーは触らない(core は `data/` を import しない。ID とレアリティが要る所は `DeckCard` で受け取る)
+- `data/` — 同梱データ(`cards.json` / `npcs.json` / `sources.json` / `achievements.json` / `competitions.json`(大会 4 種) / `open-tournaments.json`(オフィシャルトーナメントのルール 10 件))と検索、対戦前に決まるルール(`preMatchRules`)、想定で埋める準備(`withPrior`)、数字 4 つからの逆引き、数字 → カード ID の対応づけ、カードの絵の ID と URL(`artIdOf` / `cardArtUrl`)、カードの入手方法(`cardSources`)、所有率とアチーブメントの判定(`ownershipPercent` / `achievementStatus`)。エンジンとソルバーは触らない(core は `data/` を import しない。ID とレアリティが要る所は `DeckCard` で受け取る)。対戦記録の表示用の文言(大会名、相手、カード名、ルール)と書き出し(JSON / TSV)は `data/historyExport.ts`
 - `worker/solver.worker.ts` — `runTask` を包むだけの殻。`hooks/useSolver.ts` がワーカープールを管理する
 - `components/Tip.tsx` — 吹き出しの殻と位置決め(要素の下、入らなければ上)。`SourceTip` とルールの説明で共用
 - `components/SourceTip.tsx` — 手持ちの画面で、マウスを乗せたカードの入手方法を出す吹き出し
@@ -61,6 +62,7 @@ npm run data:update  # カード/NPC/入手方法/アチーブメント/大会�
 - `components/Modal.tsx` — ネイティブ `<dialog>` の殻。`showModal()` でフォーカスの閉じ込め・Escape・背景の inert 化をブラウザに任せ、閉じる時に開く前の要素へフォーカスを戻す
 - `components/OutcomeBar.tsx` — 勝ち・引き分け・負けの割合の帯(デッキの結果。数字は文で添える)
 - `components/ConfirmAction.tsx` — 取り消せない操作(削除、置き換え、NPC を外す、対局中に設定へ戻る)の 2 段階ボタン。1 回目で「[本当に実行] [やめる]」に変わり、4 秒で戻る。`window.confirm` は自動操作を止めるので使わない
+- `components/HistoryScreen.tsx` — 対戦記録の画面。戦績(`OutcomeBar`)、新しい順の一覧(50 件ずつ)、JSON のダウンロードと TSV のコピー、削除(`ConfirmAction`)。記録への書き込みは持たない(同期は `App.tsx`)
 - `hooks/useCardArt.ts` — カードの絵を出すかのコンテキスト。`CardView` が直接読む(`memo` した `CollectionCell` の内側にも届かせるため、props では渡さない)
 - `worker/deck.worker.ts` — `runDeckTask` を包むだけの殻。`hooks/useDeckSearch.ts` がワーカープールを管理する(`useSolver` の写し。`useSolver` は対局中の本線でテストが無いので、共通化していない)
 
@@ -98,10 +100,11 @@ npm run data:update  # カード/NPC/入手方法/アチーブメント/大会�
 - **計算の進み具合(%)は後戻りさせない**: どちらも「完了した時だけ 100%」で、表示は切り捨ての整数(`progressPercent`)。
   - 対局中の手(`scheduler.ts` の `progressRatio`): 済んだ計算量 ÷ (済んだ計算量 + 残りの上限)。タスク数の done / total は、分類が終わった所で同点の手の順位付けが加わって分母が増え、後戻りする(95% → 51% を実際に踏む)。分類が済んでいない手は「この後に来うる最も重いタスク」まで残りに数え、分かった分だけ減らす。重みは分類 1 件を 1 として、応手の数え上げ(`mistakes`)を 4(空の盤面からの実測で分類の 2〜39 倍、中央値 3.5 倍)、それ以外を 1。
   - デッキの探索(`deckSearch.ts` の `deckSearchRatio`): 段階(seeds / climb / refine / certify)ごとに見込みの計算量で持ち分を割り振り、段階の中は片付いた割合で進める(climb は片付いたデッキ数 ÷ 予算)。上限の方式(全デッキを打ち切らずに調べる前提)は、打ち切りが効くと序盤が遅すぎた(強い NPC で 51 秒で 2%)。climb のデッキ 1 つの重さは、出発点の 0.3 倍と見込む(`CLIMB_COST`。イソベでの実測は 0.2〜0.35 倍で、後半ほど軽い。この 1 例しか測っていない)。全勝のデッキが見つかった時や行き止まりでは、残りの持ち分を飛ばして先へ進む。
-- **トップは対局画面**(`toTop`): 開いた時とロゴは対局画面へ。対局中なら記録はそのまま、そうでなければ下書きから新しい対局を始める(開くたびに「対戦を始める」を押さずに済むように)。自分の手札が 5 枚揃っていない(初めて開いた時など)なら設定画面。保存形式は変えていない(起動時の `usePersisted` の読み込みに `toTop` を挟むだけ)。ロゴは手持ちの画面も閉じる。`<a href={BASE_URL}>` なので、Ctrl/⌘ + クリックは新しいタブで開く。「手持ち」のボタンは対局中も出す(手持ちの画面を開いている間は `PlayScreen` が外れ、戻ると計算をやり直す。記録は消えない)。
+- **トップは対局画面**(`toTop`): 開いた時とロゴは対局画面へ。対局中なら記録はそのまま、そうでなければ下書きから新しい対局を始める(開くたびに「対戦を始める」を押さずに済むように)。自分の手札が 5 枚揃っていない(初めて開いた時など)なら設定画面。保存形式は変えていない(起動時の `usePersisted` の読み込みに `toTop` を挟むだけ)。ロゴは手持ち・対戦記録の画面も閉じる。`<a href={BASE_URL}>` なので、Ctrl/⌘ + クリックは新しいタブで開く。「手持ち」のボタンは対局中も出す(手持ちの画面を開いている間は `PlayScreen` が外れ、戻ると計算をやり直す。記録は消えない)。
 - **ルールの説明はホバーで出す**: 設定画面と「ルールを変更」のチップ・セグメント(「なし」「自由」にも)、対局画面の上のルール名、NPC の注意書きのルール名。文は `RULE_HELP`(ゲーム内の説明文 = XIVAPI の `TripleTriadRule.Description` とエンジンの実装に合わせ、初めての人に分かる言葉で書いた)。チップのタップはルールの切り替えなので、タッチの端末向けに `RuleChips` の下へ `<details>`「ルールの説明」を添える。ルール名のボタンはタップでも出る。吹き出しは `RuleChips` の中に描く(`<dialog>` の最上位レイヤーの外に描くとダイアログの下に隠れる)。Escape は吹き出しだけを消す(`preventDefault` でダイアログまで閉じないようにしている。ヘッドレス Chrome に CDP で実キーを送って、1 回目で吹き出しだけ、2 回目でダイアログが閉じるのを確認した)。NPC の検索結果の行(行全体が選ぶボタン)には付けていない。
 - **状態の更新関数に副作用を入れない**: StrictMode では更新関数が 2 回走り、カードが二重に確定する(`CardEditor` で実際に踏んだ)。
-- **手持ちはカード ID で保存する**: 保存済みデッキは `CardDef`(数字とタイプ)だが、手持ちは数字もタイプも同じ別カードが 6 組あるので ID で持つ(`triadnavi:collection:v1`)。同梱データに無い ID も捨てない(データを古い版に戻しても所持が消えないように)。手持ちの画面は `AppState.phase` に入れず `App.tsx` の一時的な状態にしている(`parseAppState` は未知の phase を対戦前に落とすので、保存形式を変えずに済む)。
+- **手持ちはカード ID で保存する**: 保存済みデッキは `CardDef`(数字とタイプ)だが、手持ちは数字もタイプも同じ別カードが 6 組あるので ID で持つ(`triadnavi:collection:v1`)。同梱データに無い ID も捨てない(データを古い版に戻しても所持が消えないように)。手持ちと対戦記録の画面は `AppState.phase` に入れず `App.tsx` の一時的な状態(`screen`)にしている(`parseAppState` は未知の phase を対戦前に落とすので、保存形式を変えずに済む)。
+- **対戦記録は大会とオフィシャルトーナメントだけ、最初の 1 手で作る**(`triadnavi:history:v1`、`core/history.ts`): 対象は `recordedMode`(通常モードは記録しない。広げる時はここだけ)。記録の id(`AppState.historyId`)は「対戦を始める」ではなく最初のイベントが入った時に付ける(`setEvents`)。`toTop` が開くたびに下書きから対局を作るので、開始時に作ると 1 枚も置かない空の記録が増える。反映は `App.tsx` の `useEffect` 1 箇所で、記録する対局の `setup` / `events` が変わるたびに `replay` して entry の該当 game を書き直す(`syncGame` は同じ入力なら同じ結果なので、StrictMode の 2 回実行でも再読み込み直後でも増えない。乱数の id と `Date.now()` は更新関数の外で作る)。1 entry = 1 対戦で、サドンデスの再戦は `games[round]` に足す(round 0 の同期で後ろの再戦を落とすので、途中の「はじめから」で前の再戦が残らない)。入力したデッキは `games[0].setup.myHand`、相手とルールは entry に二重に持たず各 game の `setup` から導く(対局中の「ルールを変更」で `setup.rules` が変わる)。「はじめから」は途中なら同じ id、終局後(「同じ相手ともう一戦」)は id を外して次の 1 手で別の記録になる。「設定を変える」は id を外すだけで記録は残る(未完)。記録を消したら今の対局の id も外す(外さないと次の 1 手で丸ごと復活する。`setEvents` は events が 0 → 1 以上の時だけ付けるので、消した対局は以降記録しない)。上限 200 件で古いものから消す(1 件 ≈ 2 KB、候補 20 枚 + 再戦で最大 8 KB。1 手ごとに全体を JSON にして書き、github.io は他のプロジェクトと localStorage 5 MB を共有する)。書き出しは JSON(保存データそのまま。`games[i].setup` + `events` を `replay` に渡せば盤面を再生できる)と TSV(1 行 1 対戦、カードは 5 列。表計算向け)。
 - **カードリストの並びは ID 順ではない**: ゲーム内の番号は `order`(`ex` なら Ex. 番号)。475 枚中 408 枚で ID と食い違うので、手持ちの画面は `CARDS_IN_LIST_ORDER` で並べる。
 - **デッキは「対戦開始時のシナリオ」で評価する**: シナリオ = ルーレットの結果 × 相手の具体的な手札 × 先攻/後攻 × スワップの交換 ×(オーダーなら)相手の並び順 ×(カオスなら)双方の出る順。デッキに依らないリストを対戦条件のキーをシードに 1 回だけ作り、全デッキを同じリストで採点する(共通乱数。サンプリングが入ってもデッキ同士の比較に乱数の差が乗らず、同じ条件なら何度やっても同じ結果)。全ての組み合わせが上限以下なら全列挙、超えたら層別サンプリングし、上位 3 デッキだけを大きいリストで測り直す(`scenarioBudget`)。
 - **デッキの比べ方**: 勝ちが確定する確率 → 引き分け以上が確定する確率 → 負ける時の枚数差の小ささ → 静的な点。強い NPC(デッキ制限に縛られず ★5 を何枚も使う)には、相手が最善を尽くすとどのデッキも勝てないので、負けの浅さまで見ないと差がつかない。シナリオ 1 つは安い順に「勝ちの探り → 引き分けの探り → 負けの深さ」の 3 段階で調べ、前の段階で決まれば後は省く(勝ちが外れて引き分けが当たれば、保証値はちょうど 0)。比べる順と調べる順が同じなので、勝ちの数で上回れない候補は重い探索を 1 回もせずに落とせる。

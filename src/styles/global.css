@@ -2078,3 +2078,92 @@ dialog.modal::backdrop {
     transition: none !important;
   }
 }
+
+/* ---- 対戦記録 ---- */
+.history {
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+.hist-tally {
+  margin: 0.8rem 0 0;
+}
+
+.hist-tally h3 {
+  margin: 0 0 0.4rem;
+}
+
+/* 1 行 = 大会名 + 勝分敗、その下に帯(2 列目まで伸ばす) */
+.hist-tally-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.8rem;
+  align-items: baseline;
+  margin-bottom: 0.6rem;
+}
+
+.hist-tally-row .outcome-bar {
+  grid-column: 1 / -1;
+}
+
+.hist-tally-num {
+  font-family: var(--font-num);
+  font-weight: 600;
+}
+
+.hist-list {
+  list-style: none;
+  margin: 0.8rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+/* 今の対局の記録。金の枠は「選択中」の役割 */
+.hist-entry.is-current {
+  border-color: var(--gilt-soft);
+}
+
+.hist-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+}
+
+.hist-head time {
+  font-family: var(--font-num);
+}
+
+.hist-head .confirm-action,
+.hist-head > .btn-danger {
+  margin-left: auto;
+}
+
+.hist-meta {
+  margin: 0.4rem 0 0;
+  font-size: var(--fs-sm);
+}
+
+/* 相手の手札と同じ幅。40rem に 5 枚だと大きすぎる */
+.hist-cards {
+  max-width: 19rem;
+  margin: 0.5rem 0;
+}
+
+.hist-result {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-num);
+  font-weight: 600;
+}
+
+.hist-result.is-win { color: var(--good); }
+.hist-result.is-loss { color: var(--bad); }
+
+/* 狭い幅では大会名の横に数字を置かず、下に落とす(名前が途中で折れないように) */
+@media (max-width: 36rem) {
+  .hist-tally-row {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}

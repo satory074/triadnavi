@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EMPTY_DRAFT, INITIAL_STATE, applyNpc, applyOpenRuleset, applyTournament, changeRules, clearNpc, clearOppSlot, draftToSetup, handPriorOf, matchupFromDraft, parseAppState, restartMatch,
-  revealPoolCard, setMode, setupWarnings, toTop, toggleRule, type AppState,
+  revealPoolCard, setEvents, setMode, setupWarnings, toTop, toggleRule, type AppState,
 } from './appState';
 import { replay } from './match';
 import { RULE_HELP, RULE_NAMES } from './rules';
@@ -95,7 +95,7 @@ describe('保存と復元', () => {
   it('対局中の状態を往復できる', () => {
     const draft = { ...EMPTY_DRAFT, mode: 'tournament' as const, tournamentId: 3, myCards: [c(1), c(2), c(3), c(4), c(5)], oppCards: [c(6), c(7), null, null, null], oppPool: [c(8), c(9), c(10)], ruleIds: [4, 6] };
     const setup = draftToSetup(draft)!;
-    const state: AppState = { phase: 'play', draft, setup, events: [{ t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 }] };
+    const state: AppState = { phase: 'play', draft, setup, events: [{ t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 }], historyId: 'h1' };
     const back = parseAppState(JSON.stringify(state));
     expect(back).toEqual(state);
     expect(replay(back.setup!, back.events).applied).toBe(1);
@@ -125,7 +125,7 @@ describe('保存と復元', () => {
 describe('トップは対局画面', () => {
   it('対局中の記録は 1 件も消さず、手札が揃っていなければ設定画面のまま', () => {
     const draft = { ...EMPTY_DRAFT, myCards: [c(1), c(2), c(3), c(4), c(5)] };
-    const playing: AppState = { phase: 'play', draft, setup: draftToSetup(draft), events: [{ t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 }] };
+    const playing: AppState = { phase: 'play', draft, setup: draftToSetup(draft), events: [{ t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 }], historyId: null };
     expect(toTop(playing)).toBe(playing);
     const fresh = toTop({ ...INITIAL_STATE, draft });
     expect(fresh.phase).toBe('play');
@@ -139,11 +139,26 @@ describe('はじめから', () => {
   it('サドンデスの再戦中でも、下書きの手札で最初の対局に戻る', () => {
     const draft = { ...EMPTY_DRAFT, myCards: [c(1), c(2), c(3), c(4), c(5)], ruleIds: [5], first: 1 as const };
     const setup = { ...draftToSetup(draft)!, myHand: [c(9), c(9), c(9), c(9), c(9)], round: 2, first: 0 as const };
-    const next = restartMatch({ phase: 'play', draft, setup, events: [{ t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 }] });
+    const next = restartMatch({ phase: 'play', draft, setup, events: [{ t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 }], historyId: null });
     expect(next.events).toEqual([]);
     expect(next.setup!.round).toBe(0);
     expect(next.setup!.myHand).toEqual(draft.myCards);
     expect(next.setup!.first).toBe(1);
+  });
+
+  it('対戦記録の id は最初のイベントで付き、途中の「はじめから」では同じ、終局後は外れ、通常モードでは付かない', () => {
+    const draft = { ...EMPTY_DRAFT, mode: 'tournament' as const, tournamentId: 1, myCards: [c(1), c(2), c(3), c(4), c(5)], oppCards: [c(6), c(7), c(8), c(9), c(10)] };
+    const base: AppState = { phase: 'play', draft, setup: draftToSetup(draft)!, events: [], historyId: null };
+    // 自分と相手が交互に 0〜8 のマスへ置く(先攻は自分)
+    const move = (i: number): AppState['events'][number] => ({ t: 'place', by: i % 2 === 0 ? 0 : 1, card: { from: i % 2 === 0 ? 'my' : 'opp', index: Math.floor(i / 2) }, cell: i });
+    const started = setEvents(base, [move(0)], 'h1');
+    expect(started.historyId).toBe('h1');
+    expect(setEvents(started, [move(0), move(1)], 'h2').historyId).toBe('h1'); // 2 手目では付け直さない
+    expect(restartMatch(started).historyId).toBe('h1'); // 途中の「はじめから」は同じ対戦
+    const done = setEvents(started, Array.from({ length: 9 }, (_, i) => move(i)), 'h3');
+    expect(replay(done.setup!, done.events).finished).toBe(true);
+    expect(restartMatch(done).historyId).toBeNull(); // 終局後の「同じ相手ともう一戦」は別の対戦
+    expect(setEvents({ ...base, draft: { ...draft, mode: 'free' } }, [move(0)], 'h4').historyId).toBeNull();
   });
 });
 
@@ -154,7 +169,7 @@ describe('対局中のルール変更', () => {
       { t: 'place', by: 0, card: { from: 'my', index: 0 }, cell: 4 },
       { t: 'place', by: 1, card: { from: 'opp', index: 0 }, cell: 1 },
     ];
-    const next = changeRules({ phase: 'play', draft, setup: draftToSetup(draft)!, events }, [2, 4, 11], false);
+    const next = changeRules({ phase: 'play', draft, setup: draftToSetup(draft)!, events, historyId: null }, [2, 4, 11], false);
     expect(next.events).toEqual(events);
     expect(replay(next.setup!, next.events).applied).toBe(events.length);
 

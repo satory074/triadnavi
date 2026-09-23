@@ -1,6 +1,6 @@
 import type { Matchup } from './deckEval';
 import type { HandPrior, PriorLevel } from './handPrior';
-import type { MatchEvent, MatchSetup } from './match';
+import { replay, type MatchEvent, type MatchSetup } from './match';
 import { parseCard, sameCard } from './presets';
 import { RULE_ID, rulesFromIds } from './rules';
 import type { CardDef, Player } from './types';
@@ -9,6 +9,9 @@ import type { CardDef, Player } from './types';
 
 /** 対戦の種類: 通常(NPC 戦・対人戦) / 大会(ランキング形式) / オフィシャルトーナメント(ドラフト) */
 export type MatchMode = 'free' | 'tournament' | 'open';
+
+/** 対戦記録の対象になる対戦の種類(通常モードは記録しない) */
+export type RecordedMode = Exclude<MatchMode, 'free'>;
 
 export interface SetupDraft {
   mode: MatchMode;
@@ -36,6 +39,8 @@ export interface AppState {
   draft: SetupDraft;
   setup: MatchSetup | null;
   events: MatchEvent[];
+  /** 対戦記録(core/history.ts)の entry の id。記録しない対局(通常モード、まだ 1 件も記録していない)は null */
+  historyId: string | null;
 }
 
 export const EMPTY_DRAFT: SetupDraft = {
@@ -53,7 +58,7 @@ export const EMPTY_DRAFT: SetupDraft = {
   priorLevel: 2,
 };
 
-export const INITIAL_STATE: AppState = { phase: 'setup', draft: EMPTY_DRAFT, setup: null, events: [] };
+export const INITIAL_STATE: AppState = { phase: 'setup', draft: EMPTY_DRAFT, setup: null, events: [], historyId: null };
 
 /** エンジンの挙動に関係するルール ID(チップとして選べるもの) */
 export const SELECTABLE_RULE_IDS: readonly number[] = [2, 3, 4, 6, 10, 11, 12, 13, 8, 9, 5];
@@ -185,6 +190,21 @@ export function draftToSetup(draft: SetupDraft): MatchSetup | null {
   };
 }
 
+/** 対戦記録の対象か。対象を広げる時(通常モードも記録するなど)はここだけ変える */
+export function recordedMode(draft: SetupDraft): RecordedMode | null {
+  return draft.mode === 'free' ? null : draft.mode;
+}
+
+/**
+ * 対局の記録(events)を置き換える。記録する対局で最初のイベントが入った時(0 件 → 1 件以上、1 局目)に対戦記録の id を付ける。
+ * 「対戦を始める」ではなく最初のイベントで付けるのは、toTop が開くたびに下書きから対局を作るため(1 枚も置かない対局の空の記録を増やさない)。
+ * 記録を消した対局は events が既に 1 件以上あるので付け直さない。nextId は更新関数の外で作って渡す(core は乱数を読まない)
+ */
+export function setEvents(state: AppState, events: MatchEvent[], nextId: string): AppState {
+  const fresh = state.historyId === null && recordedMode(state.draft) !== null && state.events.length === 0 && events.length > 0 && (state.setup?.round ?? 0) === 0;
+  return { ...state, events, historyId: fresh ? nextId : state.historyId };
+}
+
 /**
  * トップ(起動時とロゴ)は対局画面。対局中ならそのまま(記録を消さない)、そうでなければ下書きから新しい対局を始める。
  * 自分の手札が揃っていない(初めて開いた時など)なら、対局を作れないので設定画面。
@@ -192,7 +212,7 @@ export function draftToSetup(draft: SetupDraft): MatchSetup | null {
 export function toTop(state: AppState): AppState {
   if (state.phase === 'play' && state.setup) return state;
   const setup = draftToSetup(state.draft);
-  return setup ? { ...state, phase: 'play', setup, events: [] } : { ...state, phase: 'setup', setup: null, events: [] };
+  return setup ? { ...state, phase: 'play', setup, events: [], historyId: null } : { ...state, phase: 'setup', setup: null, events: [], historyId: null };
 }
 
 /**
@@ -201,7 +221,9 @@ export function toTop(state: AppState): AppState {
  */
 export function restartMatch(state: AppState): AppState {
   const setup = draftToSetup(state.draft) ?? state.setup;
-  return { ...state, phase: 'play', setup, events: [] };
+  // 終局後(「同じ相手ともう一戦」)は別の対戦なので対戦記録の id を外す。途中の「はじめから」は同じ対戦のやり直しなので保つ
+  const finished = state.setup !== null && replay(state.setup, state.events).finished;
+  return { ...state, phase: 'play', setup, events: [], historyId: finished ? null : state.historyId };
 }
 
 /**
@@ -263,6 +285,32 @@ function parseDraft(x: unknown): SetupDraft {
 }
 
 /**
+ * 保存された setup を検証して読む。手札 5 枚と相手の 5 スロットが揃っていなければ null。
+ * rules / options は base の上に保存された値を重ねる(欠けた項目は base)。npcId は保存値が整数ならそれ、無ければ base。
+ * 対局中の保存(parseAppState)と対戦記録(parseHistory)が同じ経路を通る
+ */
+export function parseSetup(x: unknown, base: Pick<MatchSetup, 'rules' | 'options' | 'npcId'>): MatchSetup | null {
+  if (typeof x !== 'object' || x === null) return null;
+  const s = x as Record<string, unknown>;
+  const myHand = (Array.isArray(s.myHand) ? s.myHand : []).map(parseCard);
+  const oppSlots = Array.isArray(s.oppSlots) ? s.oppSlots.map(parseCard) : [];
+  if (myHand.length !== 5 || myHand.some((c) => c === null) || oppSlots.length !== 5) return null;
+  const options = typeof s.options === 'object' && s.options !== null ? (s.options as Record<string, unknown>) : {};
+  const npcId = Number.isInteger(s.npcId) ? (s.npcId as number) : base.npcId;
+  return {
+    rules: { ...base.rules, ...(typeof s.rules === 'object' && s.rules !== null ? (s.rules as MatchSetup['rules']) : {}) },
+    options: { ...base.options, ...(typeof options.fallenAceInCombo === 'boolean' ? { fallenAceInCombo: options.fallenAceInCombo } : {}) },
+    myHand: myHand as CardDef[],
+    oppSlots,
+    oppPool: (Array.isArray(s.oppPool) ? s.oppPool : []).map(parseCard).filter((c): c is CardDef => c !== null),
+    first: s.first === 1 ? 1 : 0,
+    round: Number.isInteger(s.round) ? Math.max(0, s.round as number) : 0,
+    oppOrderKnown: s.oppOrderKnown === true,
+    ...(npcId !== undefined ? { npcId } : {}),
+  };
+}
+
+/**
  * 保存された状態を読む。イベントの中身の検証は replay に委ねる(壊れたイベント以降は捨てられる)。
  * 対局中の setup は、下書きから作り直せない(サドンデス再戦で変わる)ので、そのまま検証して使う。
  */
@@ -271,24 +319,11 @@ export function parseAppState(raw: string | null): AppState {
   try {
     const o = JSON.parse(raw) as Record<string, unknown>;
     const draft = parseDraft(o.draft);
-    const s = o.setup as Record<string, unknown> | null | undefined;
-    if (o.phase !== 'play' || !s || typeof s !== 'object') return { ...INITIAL_STATE, draft };
-    const myHand = (Array.isArray(s.myHand) ? s.myHand : []).map(parseCard);
-    const oppSlots = Array.isArray(s.oppSlots) ? s.oppSlots.map(parseCard) : [];
-    if (myHand.length !== 5 || myHand.some((c) => c === null) || oppSlots.length !== 5) return { ...INITIAL_STATE, draft };
-    const base = draftToSetup({ ...draft, myCards: myHand });
-    if (!base) return { ...INITIAL_STATE, draft };
-    const setup: MatchSetup = {
-      ...base,
-      rules: { ...base.rules, ...(typeof s.rules === 'object' && s.rules !== null ? (s.rules as MatchSetup['rules']) : {}) },
-      myHand: myHand as CardDef[],
-      oppSlots,
-      oppPool: (Array.isArray(s.oppPool) ? s.oppPool : []).map(parseCard).filter((c): c is CardDef => c !== null),
-      first: s.first === 1 ? 1 : 0,
-      round: Number.isInteger(s.round) ? Math.max(0, s.round as number) : 0,
-      oppOrderKnown: s.oppOrderKnown === true,
-    };
-    return { phase: 'play', draft, setup, events: Array.isArray(o.events) ? (o.events as MatchEvent[]) : [] };
+    if (o.phase !== 'play') return { ...INITIAL_STATE, draft };
+    const setup = parseSetup(o.setup, { rules: rulesFromIds(draft.ruleIds), options: { fallenAceInCombo: draft.fallenAceInCombo }, npcId: draft.npcId ?? undefined });
+    if (!setup) return { ...INITIAL_STATE, draft };
+    const historyId = typeof o.historyId === 'string' && o.historyId !== '' ? o.historyId : null;
+    return { phase: 'play', draft, setup, events: Array.isArray(o.events) ? (o.events as MatchEvent[]) : [], historyId };
   } catch {
     return INITIAL_STATE;
   }
