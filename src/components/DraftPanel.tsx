@@ -130,9 +130,9 @@ function DraftRound({ round, draft, onDraft }: RoundProps) {
               ) : (
                 <p className="note" role="status">良い順です。上のセットの「このセットを取った」で確定してください。</p>
               )}
-              {results.map((e) => {
+              {results.map((e, i) => {
                 const idx = setIndexOf(e.cards);
-                return <DeckResult key={e.key} search={search} evaluation={e} context={compare.context} title={idx >= 0 ? `セット ${idx + 1}` : ''} replaces={false} />;
+                return <DeckResult key={e.key} search={search} evaluation={e} context={compare.context} title={idx >= 0 ? `セット ${idx + 1}` : ''} replaces={false} best={i === 0} />;
               })}
             </div>
           )}

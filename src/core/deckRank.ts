@@ -1,7 +1,9 @@
+import { DECK_PROBLEM_TEXT } from './collection';
 import { poolShort, variantLabel, type DeckEvalKind, type Matchup, type ScenarioSet } from './deckEval';
-import { deckScore, isComplete, type DeckEval, type DeckSearch, type StopReason } from './deckSearch';
+import { deckScore, isComplete, type DeckEval, type DeckSearch, type SeedCheck, type StopReason } from './deckSearch';
 import { DRAFT_CHOICES, META_TOP, type HandPrior } from './handPrior';
 import { percent } from './rank';
+import { formatSides, type CardDef } from './types';
 
 /** デッキの評価と提案の、日本語の表示。「確定」「保証」「推定」の言葉の使い分けは core/rank.ts と揃える */
 
@@ -36,19 +38,24 @@ export interface DeckLine {
 
 const uniform = (weights: readonly number[]) => weights.every((w) => Math.abs(w - weights[0]) < 1e-9);
 
-/** デッキ 1 つの結果の説明 */
-export function deckLines(s: DeckSearch, e: DeckEval): DeckLine[] {
+/** 勝ち・引き分けの数え方。測り直しが済んでいればそちらのシナリオで数える(deckScore と同じ) */
+function counts(s: DeckSearch, e: DeckEval) {
   const refined = e.refined !== undefined && isComplete(s, e, 'refine');
   const scenarios = refined ? s.refineScenarios! : s.scenarios;
   const values = (refined ? e.refined! : e.tally).value;
-  const score = deckScore(s, e);
   const n = scenarios.length;
-  const out: DeckLine[] = [];
   const count = (pred: (v: number) => boolean) => values.filter((v) => v !== undefined && pred(v)).length;
   const wins = count((v) => v >= 1);
   const draws = count((v) => v === 0);
   const asCount = uniform(scenarios.map((x) => x.weight));
   const share = (k: number, p: number) => (asCount ? `${n} 通りのうち ${k} 通り` : `${percent(p)}`);
+  return { n, wins, draws, share, score: deckScore(s, e) };
+}
+
+/** デッキ 1 つの結果の説明 */
+export function deckLines(s: DeckSearch, e: DeckEval): DeckLine[] {
+  const { n, wins, draws, share, score } = counts(s, e);
+  const out: DeckLine[] = [];
 
   if (wins === n) out.push({ text: `想定した ${n} 通りの全てで、最善を尽くせば勝ちが確定します。`, tone: 'win' });
   else {
@@ -88,6 +95,33 @@ export function variantRows(s: DeckSearch, e: DeckEval, search: ScenarioSet, ref
     const sum = (pred: (x: number) => boolean) => idx.reduce((a, i) => a + (pred(values[i] ?? -9) ? set.scenarios[i].weight : 0), 0);
     return { label: variantLabel(v), share: v.share, win: total > 0 ? sum((x) => x >= 1) / total : 0, drawOrBetter: total > 0 ? sum((x) => x >= 0) / total : 0 };
   });
+}
+
+/** 登録済みのデッキの一覧の 1 行に添える短い要約(deckLines の最初の 2 行と同じ数え方) */
+export function deckSummary(s: DeckSearch, e: DeckEval): string {
+  const { wins, draws, share, score } = counts(s, e);
+  return `勝ち確定 ${share(wins, score.win)} · 引き分け以上 ${share(wins + draws, score.drawOrBetter)}`;
+}
+
+const cardNames = (cards: readonly CardDef[]) => cards.map((c) => c.label ?? formatSides(c.sides)).join('、');
+
+/** 登録済みのデッキを評価しなかった理由(checkSeed の結果。使える時は空文字) */
+export function seedCheckText(check: SeedCheck): string {
+  if (check.problems.length > 0) return `${check.problems.map((p) => DECK_PROBLEM_TEXT[p]).join('。')}。デッキの制限に合わないので、評価していません。`;
+  if (check.missing.length === 0) return '';
+  // 手入力のカード(同梱データに無い数字)は仮の負の ID。手持ちに登録しても直らないので、文を分ける
+  if (check.missing.some((c) => c.id < 0)) return `同梱データに無いカード(${cardNames(check.missing)})を含むので、評価していません。`;
+  return `手持ちに無いカード(${cardNames(check.missing)})を含むので、評価していません。手持ちに登録すると評価できます。`;
+}
+
+/**
+ * 登録済みのデッキと、見つかった最良の関係。best は登録済みのデッキのうち最も良いものの名前(表示用に整形済み)。
+ * 途中で止めた時(complete = false)は、登録済みのデッキしか評価していないことが多いので「編集不要」とは言わない
+ */
+export function mineVerdict(best: string, sameAsBest: boolean, complete: boolean): string {
+  if (!sameAsBest) return `登録済みのデッキで最も良いのは${best}です。見つかった中で最良の方が上なので、下の候補を参照してください。`;
+  if (!complete) return `ここまでに見つかった中で最良は${best}と同じ構成です(探索は途中で止めています)。`;
+  return `見つかった中で最良は${best}と同じ構成です。ゲーム内でデッキを編集する必要はありません。`;
 }
 
 export function stopReasonText(reason: StopReason | undefined): string {

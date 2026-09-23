@@ -163,14 +163,16 @@ function greedyDeck(sorted: readonly DeckCard[], maxFive = MAX_FIVE_STAR, maxFou
 }
 
 /**
- * 探索の出発点。★4 以上の使い方(5 通り)ごとの点数最良と、ルールに合わせた型(数字の噛み合わせ、単一タイプ、タイプなし)、
- * それに利用者のデッキ(今の手札や保存済みデッキ)。オーダーでは後攻だと 5 枚目を出さないので、弱いカードを後ろにする。
+ * 探索の出発点。利用者のデッキ(今の手札や保存済みデッキ)を先頭に置き、その後に ★4 以上の使い方(5 通り)ごとの点数最良と、
+ * ルールに合わせた型(数字の噛み合わせ、単一タイプ、タイプなし)。出発点は並びの順に評価されるので、利用者のデッキが最初に片付く
+ * (最良のデッキがすでに組んであるなら、ゲーム内でデッキを編集しなくて済む)。オーダーでは後攻だと 5 枚目を出さないので、弱いカードを後ろにする。
  */
 export function seedDecks(pools: DeckPools, m: Matchup, extra: readonly DeckCard[][]): DeckCard[][] {
   const all = poolCards(pools);
   const byScore = (a: DeckCard, b: DeckCard) => pools.score[b.id] - pools.score[a.id] || a.id - b.id;
   const sorted = [...all].sort(byScore);
   const out: (DeckCard[] | null)[] = [];
+  for (const deck of extra) if (deck.length === DECK_SIZE) out.push([...deck]);
   for (const [five, fourPlus] of [[1, 2], [0, 2], [1, 1], [0, 1], [0, 0]]) out.push(greedyDeck(sorted, five, fourPlus));
 
   const variants = ruleVariants(m);
@@ -181,7 +183,6 @@ export function seedDecks(pools: DeckPools, m: Matchup, extra: readonly DeckCard
   if (variants.some((v) => v.rules.typeShift !== 'none')) {
     for (const type of [0, 1, 2, 3, 4]) out.push(greedyDeck(sorted.filter((c) => c.type === type)));
   }
-  for (const deck of extra) if (deck.length === DECK_SIZE) out.push([...deck]);
 
   const seen = new Set<string>();
   return out.filter((d): d is DeckCard[] => {

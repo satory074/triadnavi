@@ -165,6 +165,23 @@ describe('デッキの探索', () => {
     expect(topDecks(s).length).toBeGreaterThan(0);
   });
 
+  it('利用者のデッキ(今の手札・保存デッキ)は出発点の先頭に入って最初に評価され、探索が終わった時に全て評価済み(打ち切られない)', () => {
+    const f = fixture(18);
+    const low = f.owned.filter((c) => c.stars <= 3);
+    const mine = [low.slice(0, 5), low.slice(5, 10)];
+    const keys = mine.map((d) => deckKey(d, false));
+    const s0 = f.start({ maxDecks: 12 }, mine);
+    expect(s0.seeds.slice(0, 2)).toEqual(keys);
+    // 最初に配るタスクは、先頭の(利用者の)デッキのもの
+    expect(nextDeckTasks(s0, 3).map((t) => t.deckKey)).toEqual([keys[0], keys[0], keys[0]]);
+    const s = runDeckSearchSync(f.ctx, s0, synthetic());
+    expect(s.phase).toBe('done');
+    for (const k of keys) {
+      expect(s.evals[k].pruned).toBe(false);
+      expect(isComplete(s, s.evals[k])).toBe(true);
+    }
+  });
+
   it('climb を切ると、渡したデッキを評価するだけで終わる(今のデッキの評価)', () => {
     const f = fixture(12);
     const mine = f.owned.filter((c) => c.stars <= 3).slice(0, 5);

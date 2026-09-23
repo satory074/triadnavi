@@ -74,7 +74,7 @@ describe('候補の絞り込み', () => {
 });
 
 describe('出発点のデッキ', () => {
-  it('全て合法で手持ちだけからなり、同じ入力なら同じ結果。利用者のデッキも含まれる', () => {
+  it('全て合法で手持ちだけからなり、同じ入力なら同じ結果。利用者のデッキは先頭に入る(最初に評価される)', () => {
     const r = makeRng(5);
     for (let i = 0; i < 30; i++) {
       const owned = collection(r, 20 + Math.floor(r() * 200));
@@ -87,7 +87,7 @@ describe('出発点のデッキ', () => {
         expect(isLegalDeck(d)).toBe(true);
         expect(d.every((c) => owned.includes(c))).toBe(true);
       }
-      if (mine.length === 5) expect(seeds.some((d) => deckKey(d, true) === deckKey(mine, true))).toBe(true);
+      if (mine.length === 5) expect(deckKey(seeds[0], true)).toBe(deckKey(mine, true));
       expect(seedDecks(pools, m, mine.length === 5 ? [mine] : [])).toEqual(seeds);
     }
   });

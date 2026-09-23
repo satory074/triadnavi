@@ -168,12 +168,14 @@ export const ALL_DECK_CARDS: readonly DeckCard[] = CARDS.map(toDeckCard);
 
 /**
  * カード(数字とタイプ)に ID とレアリティを付ける。同梱データに無い(手入力の)カードは仮の負の ID とレアリティ 0。
- * 同じ ID は 2 回使わない(数字もタイプも同じ別カードが 6 組あるため)
+ * 同じ ID は 2 回使わない(数字もタイプも同じ別カードが 6 組あるため)。ownedIds を渡すと、候補のうち手持ちにある ID を優先する
+ * (名前の無い保存デッキで、手持ちに無い側の ID を引いて「手持ちに無い」と誤判定しないため)
  */
-export function toDeckCards(cards: readonly CardDef[]): DeckCard[] {
+export function toDeckCards(cards: readonly CardDef[], ownedIds?: ReadonlySet<number>): DeckCard[] {
   const used = new Set<number>();
   return cards.map((c, i) => {
-    const id = resolveCardIds(c).find((x) => !used.has(x));
+    const ids = resolveCardIds(c).filter((x) => !used.has(x));
+    const id = (ownedIds && ids.find((x) => ownedIds.has(x))) ?? ids[0];
     if (id === undefined) return { ...c, id: -(i + 1), stars: 0 };
     used.add(id);
     return { ...c, id, stars: byId.get(id)!.stars };

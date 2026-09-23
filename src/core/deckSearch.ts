@@ -1,4 +1,4 @@
-import { isLegalDeck, type DeckCard } from './collection';
+import { deckProblems, type DeckCard, type DeckProblem } from './collection';
 import type { DeckContext, DeckEvalKind, DeckTask, DeckTaskResult, Matchup, ScenarioSet, SetName } from './deckEval';
 import { deckEvalKind, makeScenarios, matchupKey, runDeckTask, scenarioBudget, supersetApplicable } from './deckEval';
 import { buildPools, deckHeuristic, deckKey, neighbours, seedDecks, type DeckPools, type PoolOptions } from './deckPool';
@@ -627,6 +627,23 @@ export interface PreparedSearch {
   kind: DeckEvalKind;
 }
 
+/** 利用者のデッキを出発点に使えない理由。両方空なら使える */
+export interface SeedCheck {
+  problems: DeckProblem[];
+  /** 手持ちに無いカード(手入力で ID が負のものも含む) */
+  missing: DeckCard[];
+}
+
+/**
+ * 利用者のデッキ(今の手札、保存デッキ)を出発点に使えるか。合法で、全て手持ちにあるものだけ使う
+ * (手持ちに無いカードで探索を進めると、提案が手持ちの外に出る)。使えない時は UI がここの理由を表示する。
+ */
+export function checkSeed(deck: readonly DeckCard[], ownedIds: ReadonlySet<number>): SeedCheck {
+  return { problems: deckProblems(deck), missing: deck.filter((c) => !ownedIds.has(c.id)) };
+}
+
+export const seedUsable = (check: SeedCheck): boolean => check.problems.length === 0 && check.missing.length === 0;
+
 /** 相手の具体的な手札を全て並べる上限(学習済みのカードで候補が増えた NPC 向け。PlayScreen と同じ値) */
 const MAX_HANDS = 30;
 
@@ -645,7 +662,7 @@ export function prepareDeckSearch(input: PrepareInput): PreparedSearch {
   const searching = input.mode === 'search';
   const pools = searching ? buildPools(input.owned, m, input.pool) : null;
   const ownedIds = new Set(input.owned.map((c) => c.id));
-  const mine = input.decks.filter((d) => isLegalDeck(d) && d.every((c) => ownedIds.has(c.id)));
+  const mine = input.decks.filter((d) => seedUsable(checkSeed(d, ownedIds)));
   const seeds = pools ? seedDecks(pools, m, mine) : input.decks.map((d) => [...d]);
   const search = createDeckSearch({
     key: `${key}#${input.mode}`,

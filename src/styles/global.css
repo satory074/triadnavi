@@ -833,8 +833,88 @@ input:not([type]) {
   background: var(--mat-800);
 }
 
-.advisor-deck:first-of-type {
+/* 最良のデッキ。:first-of-type はタグ単位なので、前に別の div があると効かない(DeckAdvisor では analysis-head が先) */
+.advisor-deck.is-best {
   border-color: var(--gilt-soft);
+}
+
+/* 登録済みのデッキ(今の手札と保存デッキ)の一覧。出発点の先頭に入れて最初に評価されるので、結果の上に置く */
+.advisor-mine {
+  margin: 0.8rem 0;
+  padding: 0.7rem;
+  border: 1px solid var(--mat-line);
+  border-radius: 0.6rem;
+  background: var(--mat-800);
+}
+
+.advisor-mine-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0 0 0.3rem;
+}
+
+.advisor-mine-head strong {
+  color: var(--paper);
+}
+
+.advisor-mine-head .muted {
+  font-size: var(--fs-xs);
+}
+
+.advisor-mine-verdict {
+  margin: 0.2rem 0 0.4rem;
+  font-size: var(--fs-sm);
+}
+
+.advisor-mine ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 1 行 1 デッキ: 名前(とカード名) / 帯 / 要約。狭い幅では帯と要約が下の行に折り返す */
+.advisor-mine li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.8rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--mat-line);
+}
+
+.advisor-mine-name {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* カード名は折り返して 5 枚とも見せる(切り詰めると狭い幅で 2 枚しか読めない) */
+.advisor-mine-name .result-sides {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+}
+
+.advisor-mine .outcome-bar {
+  flex: 1 1 6rem;
+  min-width: 6rem;
+  margin: 0;
+}
+
+.advisor-mine-sum {
+  flex: 0 1 auto;
+  font-size: var(--fs-sm);
+}
+
+/* 評価しなかった理由。.note-warn と同じ琥珀の罫 */
+.advisor-mine-check {
+  flex: 1 1 100%;
+  padding-left: 0.6rem;
+  border-left: 3px solid var(--warn);
+  font-size: var(--fs-sm);
+  color: var(--paper);
 }
 
 .advisor-deck-head {
